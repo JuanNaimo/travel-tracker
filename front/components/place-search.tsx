@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, MapPin, Loader2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { mapOsmCategory } from "@/lib/geocoding"
 
 interface SearchResult {
   place_id: number
@@ -52,26 +53,8 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
     }
   }
 
-  const mapCategoryToSpanish = (type: string, category: string): string => {
-    const categoryMap: Record<string, string> = {
-      restaurant: "restaurante",
-      cafe: "restaurante",
-      hotel: "hotel",
-      motel: "hotel",
-      museum: "museo",
-      attraction: "atraccion",
-      tourism: "atraccion",
-      park: "naturaleza",
-      nature_reserve: "naturaleza",
-      shop: "compras",
-      mall: "compras",
-    }
-
-    return categoryMap[type] || categoryMap[category] || "otros"
-  }
-
   const handleSelectPlace = (result: SearchResult) => {
-    const category = mapCategoryToSpanish(result.type, result.category)
+    const category = mapOsmCategory(result.type, result.category)
     onSelectPlace({
       name: result.display_name.split(",")[0],
       latitude: Number.parseFloat(result.lat),

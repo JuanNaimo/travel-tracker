@@ -311,7 +311,7 @@ export const db = {
       }
     },
 
-    async create(trip: Omit<Trip, 'id' | 'created_at' | 'updated_at'>) {
+    async create(trip: Omit<Trip, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
       try {
         const data = await apiRequest<Trip>('/trips', {
           method: 'POST',
@@ -381,7 +381,7 @@ export const db = {
       }
     },
 
-    async create(place: Omit<Place, 'id' | 'created_at' | 'updated_at'>) {
+    async create(place: Omit<Place, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
       try {
         const data = await apiRequest<Place>('/places', {
           method: 'POST',

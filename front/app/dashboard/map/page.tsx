@@ -10,6 +10,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StarRating } from "@/components/star-rating"
 import { AddPlaceDialog } from "@/components/add-place-dialog"
+import { toast } from "sonner"
 
 export default function MapPage() {
   const [trips, setTrips] = useState<Trip[]>([])
@@ -92,9 +93,7 @@ export default function MapPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className={`bg-white rounded-lg shadow-lg overflow-hidden transition-all ${
-            showAddPlaceDialog ? "lg:col-span-3 h-[calc(100vh-300px)]" : "lg:col-span-2 h-[600px]"
-          }`}>
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden lg:col-span-2 h-[600px]">
             {mapReady ? (
               <TravelMap
                 places={filteredPlaces}
@@ -102,6 +101,7 @@ export default function MapPage() {
                 onPlaceClick={setSelectedPlace}
                 enableAddMode={true}
                 onMapClick={handleMapClick}
+                pendingLocation={showAddPlaceDialog ? selectedCoordinates : null}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -113,7 +113,7 @@ export default function MapPage() {
             )}
           </div>
 
-          <div className={`space-y-4 transition-all ${showAddPlaceDialog ? "hidden lg:hidden" : ""}`}>
+          <div className="space-y-4">
             {selectedPlace ? (
               <Card>
                 <CardHeader>
@@ -229,36 +229,23 @@ export default function MapPage() {
           </div>
         </div>
 
-        {showAddPlaceDialog && selectedTripId !== "all" && (
-          <AddPlaceDialog
-            tripId={selectedTripId}
-            onPlaceAdded={() => {
-              loadData()
-              setShowAddPlaceDialog(false)
-              setSelectedCoordinates(null)
-            }}
-            initialCoordinates={selectedCoordinates || undefined}
-            open={showAddPlaceDialog}
-            onOpenChange={(open) => {
-              setShowAddPlaceDialog(open)
-              if (!open) setSelectedCoordinates(null)
-            }}
-          />
-        )}
-
-        {showAddPlaceDialog && selectedTripId === "all" && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h3 className="text-lg font-semibold mb-2">Selecciona un viaje primero</h3>
-              <p className="text-muted-foreground mb-4">
-                Para agregar un lugar, primero debes seleccionar un viaje específico en el filtro.
-              </p>
-              <Button onClick={() => setShowAddPlaceDialog(false)} className="w-full">
-                Entendido
-              </Button>
-            </div>
-          </div>
-        )}
+        <AddPlaceDialog
+          trips={trips}
+          defaultTripId={selectedTripId !== "all" ? selectedTripId : undefined}
+          initialCoordinates={selectedCoordinates ?? undefined}
+          open={showAddPlaceDialog}
+          onOpenChange={(open) => {
+            setShowAddPlaceDialog(open)
+            if (!open) setSelectedCoordinates(null)
+          }}
+          onPlaceAdded={(place) => {
+            if (selectedTripId !== "all" && selectedTripId !== place.trip_id) setSelectedTripId(place.trip_id)
+            setSelectedPlace(place)
+            setSelectedCoordinates(null)
+            loadData()
+            toast.success(`"${place.name}" agregado al viaje.`)
+          }}
+        />
       </main>
     </div>
   )

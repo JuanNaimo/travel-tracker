@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { StarRating } from "@/components/star-rating"
 import { Plus } from "lucide-react"
-import { db, auth } from "@/lib/api-client"
+import { db } from "@/lib/api-client"
 
 interface CreateTripDialogProps {
   onTripCreated?: () => void
@@ -39,14 +39,7 @@ export function CreateTripDialog({ onTripCreated }: CreateTripDialogProps) {
     setLoading(true)
 
     try {
-      const user = auth.getCurrentUser()
-      if (!user) {
-        console.error("No user logged in")
-        return
-      }
-
       await db.trips.create({
-        user_id: user.id,
         name: formData.name,
         description: formData.description || null,
         start_date: formData.start_date || null,

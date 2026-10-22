@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -15,22 +15,40 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { StarRating } from "@/components/star-rating"
-import { Plus } from "lucide-react"
-import { db, auth } from "@/lib/api-client"
+import { Loader2, MapPin, Plus } from "lucide-react"
+import { db, type Place, type Trip } from "@/lib/api-client"
+import { reverseGeocode } from "@/lib/geocoding"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlaceSearch } from "@/components/place-search"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+type Coordinates = { latitude: number; longitude: number }
+
 interface AddPlaceDialogProps {
-  tripId: string
-  onPlaceAdded?: () => void
-  initialCoordinates?: { latitude: number; longitude: number }
+  trips: Trip[]
+  defaultTripId?: string
+  onPlaceAdded?: (place: Place) => void
+  initialCoordinates?: Coordinates
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }
 
+const NEW_TRIP = "__new__"
+
+const emptyForm = (coordinates?: Coordinates) => ({
+  name: "",
+  description: "",
+  category: "otros" as Place["category"],
+  latitude: coordinates?.latitude.toFixed(6) ?? "",
+  longitude: coordinates?.longitude.toFixed(6) ?? "",
+  rating: 0,
+  visit_date: "",
+  expenses: "",
+})
+
 export function AddPlaceDialog({
-  tripId,
+  trips,
+  defaultTripId,
   onPlaceAdded,
   initialCoordinates,
   open: controlledOpen,
@@ -38,16 +56,11 @@ export function AddPlaceDialog({
 }: AddPlaceDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    category: "otros" as const,
-    latitude: initialCoordinates?.latitude.toString() || "",
-    longitude: initialCoordinates?.longitude.toString() || "",
-    rating: 0,
-    visit_date: "",
-    expenses: "",
-  })
+  const [error, setError] = useState<string | null>(null)
+  const [geocoding, setGeocoding] = useState(false)
+  const [formData, setFormData] = useState(() => emptyForm(initialCoordinates))
+  const [tripChoice, setTripChoice] = useState(defaultTripId ?? trips[0]?.id ?? NEW_TRIP)
+  const [newTripName, setNewTripName] = useState("")
 
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const setOpen = onOpenChange || setInternalOpen
@@ -57,52 +70,88 @@ export function AddPlaceDialog({
   if (initialCoordinates !== prevCoordinates) {
     setPrevCoordinates(initialCoordinates)
     if (initialCoordinates) {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: initialCoordinates.latitude.toString(),
-        longitude: initialCoordinates.longitude.toString(),
-      }))
+      setFormData(emptyForm(initialCoordinates))
+      setTripChoice(defaultTripId ?? trips[0]?.id ?? NEW_TRIP)
+      setError(null)
     }
   }
 
+  useEffect(() => {
+    if (!initialCoordinates) return
+    const controller = new AbortController()
+    const lookup = async () => {
+      setGeocoding(true)
+      try {
+        const result = await reverseGeocode(
+          initialCoordinates.latitude,
+          initialCoordinates.longitude,
+          controller.signal
+        )
+        if (result) {
+          setFormData((prev) => (prev.name ? prev : { ...prev, name: result.name, category: result.category }))
+        }
+      } catch {
+        // Sin conexión con OpenStreetMap: el usuario escribe el nombre
+      } finally {
+        if (!controller.signal.aborted) setGeocoding(false)
+      }
+    }
+    lookup()
+    return () => controller.abort()
+  }, [initialCoordinates])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setError(null)
 
+    const latitude = Number.parseFloat(formData.latitude)
+    const longitude = Number.parseFloat(formData.longitude)
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      setError("Elegí un lugar en el mapa, buscalo o ingresá las coordenadas.")
+      return
+    }
+    if (tripChoice === NEW_TRIP && !newTripName.trim()) {
+      setError("Ingresá el nombre del nuevo viaje.")
+      return
+    }
+
+    setLoading(true)
     try {
-      const user = auth.getCurrentUser()
-      if (!user) {
-        console.error("No user logged in")
-        return
+      let tripId = tripChoice
+      if (tripChoice === NEW_TRIP) {
+        const created = await db.trips.create({
+          name: newTripName.trim(),
+          description: null,
+          start_date: null,
+          end_date: null,
+          rating: null,
+        })
+        if (created.error || !created.data) {
+          setError(created.error ?? "No se pudo crear el viaje.")
+          return
+        }
+        tripId = created.data.id
       }
 
-      await db.places.create({
+      const { data, error } = await db.places.create({
         trip_id: tripId,
-        user_id: user.id,
         name: formData.name,
         description: formData.description || null,
         category: formData.category,
-        latitude: Number.parseFloat(formData.latitude),
-        longitude: Number.parseFloat(formData.longitude),
+        latitude,
+        longitude,
         rating: formData.rating || null,
         visit_date: formData.visit_date || null,
         expenses: formData.expenses ? Number.parseFloat(formData.expenses) : 0,
       })
+      if (error || !data) {
+        setError(error ?? "No se pudo agregar el lugar.")
+        return
+      }
 
       setOpen(false)
-      setFormData({
-        name: "",
-        description: "",
-        category: "otros",
-        latitude: "",
-        longitude: "",
-        rating: 0,
-        visit_date: "",
-        expenses: "",
-      })
-      onPlaceAdded?.()
-    } catch (error) {
-      console.error("[v0] Error creating place:", error)
+      setNewTripName("")
+      onPlaceAdded?.(data)
     } finally {
       setLoading(false)
     }
@@ -125,19 +174,60 @@ export function AddPlaceDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          Agregar Lugar
-        </Button>
-      </DialogTrigger>
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            Agregar Lugar
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Agregar nuevo lugar</DialogTitle>
-          <DialogDescription>Busca un lugar o ingresa las coordenadas manualmente.</DialogDescription>
+          <DialogDescription>
+            {initialCoordinates
+              ? "Completa los datos del lugar que marcaste en el mapa y elige el viaje."
+              : "Busca un lugar o ingresa las coordenadas manualmente."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs defaultValue="search" className="w-full">
+          <div className="space-y-2">
+            <Label htmlFor="trip">Viaje *</Label>
+            <Select value={tripChoice} onValueChange={setTripChoice} disabled={loading}>
+              <SelectTrigger id="trip">
+                <SelectValue placeholder="Selecciona un viaje" />
+              </SelectTrigger>
+              <SelectContent>
+                {trips.map((trip) => (
+                  <SelectItem key={trip.id} value={trip.id}>
+                    {trip.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value={NEW_TRIP}>+ Crear viaje nuevo</SelectItem>
+              </SelectContent>
+            </Select>
+            {tripChoice === NEW_TRIP && (
+              <Input
+                id="new-trip-name"
+                placeholder="Nombre del nuevo viaje"
+                value={newTripName}
+                onChange={(e) => setNewTripName(e.target.value)}
+                disabled={loading}
+              />
+            )}
+          </div>
+
+          {initialCoordinates && (
+            <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+              <MapPin className="h-4 w-4 shrink-0 text-green-600" />
+              <span>
+                Ubicación seleccionada: {formData.latitude}, {formData.longitude}
+              </span>
+            </div>
+          )}
+
+          <Tabs defaultValue={initialCoordinates ? "manual" : "search"} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="search">Buscar lugar</TabsTrigger>
               <TabsTrigger value="manual">Coordenadas</TabsTrigger>
@@ -180,10 +270,13 @@ export function AddPlaceDialog({
           </Tabs>
 
           <div className="space-y-2">
-            <Label htmlFor="place-name">Nombre del lugar *</Label>
+            <Label htmlFor="place-name" className="flex items-center gap-2">
+              Nombre del lugar *
+              {geocoding && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            </Label>
             <Input
               id="place-name"
-              placeholder="ej: Torre Eiffel"
+              placeholder={geocoding ? "Buscando el nombre del lugar..." : "ej: Torre Eiffel"}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
@@ -257,6 +350,8 @@ export function AddPlaceDialog({
               disabled={loading}
             />
           </div>
+
+          {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>}
 
           <div className="flex gap-2 pt-4">
             <Button

@@ -12,6 +12,7 @@ interface TravelMapProps {
   onPlaceClick?: (place: Place) => void
   onMapClick?: (coordinates: { latitude: number; longitude: number }) => void
   enableAddMode?: boolean
+  pendingLocation?: { latitude: number; longitude: number } | null
 }
 
 const TRIP_COLORS = [
@@ -60,17 +61,48 @@ export function TravelMap({
   onPlaceClick,
   onMapClick,
   enableAddMode = false,
+  pendingLocation = null,
 }: TravelMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<LeafletMap | null>(null)
+  const leafletRef = useRef<typeof import("leaflet") | null>(null)
   const markersRef = useRef<Marker[]>([])
-  const tempMarkerRef = useRef<Marker | null>(null)
+  const pendingMarkerRef = useRef<Marker | null>(null)
+  const pendingLocationRef = useRef(pendingLocation)
+  const onMapClickRef = useRef(onMapClick)
+
+  useEffect(() => {
+    pendingLocationRef.current = pendingLocation
+    onMapClickRef.current = onMapClick
+  })
+
+  const drawPendingMarker = () => {
+    const L = leafletRef.current
+    const map = mapInstanceRef.current
+    pendingMarkerRef.current?.remove()
+    pendingMarkerRef.current = null
+    const location = pendingLocationRef.current
+    if (!L || !map || !location) return
+
+    const icon = L.divIcon({
+      className: "custom-marker",
+      html: `<div class="w-8 h-8 bg-green-500 border-2 border-white rounded-full shadow-lg animate-pulse"></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    })
+    pendingMarkerRef.current = L.marker([location.latitude, location.longitude], { icon }).addTo(map)
+  }
+
+  useEffect(() => {
+    drawPendingMarker()
+  }, [pendingLocation?.latitude, pendingLocation?.longitude])
 
   useEffect(() => {
     if (typeof window === "undefined" || !mapRef.current) return
 
     const loadLeaflet = async () => {
       const L = (await import("leaflet")).default
+      leafletRef.current = L
 
       if (!mapRef.current) return
 
@@ -82,27 +114,9 @@ export function TravelMap({
           maxZoom: 19,
         }).addTo(mapInstanceRef.current)
 
-        if (enableAddMode && onMapClick) {
-          const map = mapInstanceRef.current
-          map.on("contextmenu", (e: LeafletMouseEvent) => {
-            const { lat, lng } = e.latlng
-
-            if (tempMarkerRef.current) {
-              tempMarkerRef.current.remove()
-            }
-
-            const tempIcon = L.divIcon({
-              className: "custom-marker",
-              html: `<div class="w-8 h-8 bg-green-500 border-2 border-white rounded-full shadow-lg animate-pulse"></div>`,
-              iconSize: [32, 32],
-              iconAnchor: [16, 16],
-            })
-
-            tempMarkerRef.current = L.marker([lat, lng], { icon: tempIcon }).addTo(map)
-
-            tempMarkerRef.current.bindPopup("Nuevo lugar - Completa el formulario para guardar").openPopup()
-
-            onMapClick({ latitude: lat, longitude: lng })
+        if (enableAddMode) {
+          mapInstanceRef.current.on("contextmenu", (e: LeafletMouseEvent) => {
+            onMapClickRef.current?.({ latitude: e.latlng.lat, longitude: e.latlng.lng })
           })
         }
       }
@@ -154,6 +168,8 @@ export function TravelMap({
 
         map.fitBounds(bounds, { padding: [50, 50] })
       }
+
+      drawPendingMarker()
     }
 
     loadLeaflet()
