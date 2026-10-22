@@ -19,7 +19,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Variables de entorno para build
+# Variables de entorno para build. NEXT_PUBLIC_* se incrusta en el bundle.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 

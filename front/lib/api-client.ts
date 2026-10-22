@@ -5,7 +5,8 @@ export type User = {
   id: string
   email: string
   name?: string
-  user_metadata?: Record<string, any>
+  user_metadata?: Record<string, unknown>
+  mfa_enabled: boolean
 }
 
 export type Trip = {
@@ -57,162 +58,249 @@ export type PhotoMapTarget = {
 // Configuración del API
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
+const ACCESS_TOKEN_KEY = 'access_token'
+const REFRESH_TOKEN_KEY = 'refresh_token'
+const USER_KEY = 'user'
+
 // Clase para manejar errores de API
 class ApiError extends Error {
   constructor(
     message: string,
     public status?: number,
-    public data?: any
+    public data?: unknown
   ) {
     super(message)
     this.name = 'ApiError'
   }
 }
 
-// Helper para hacer requests con el token de sesión
-async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('session_token') : null
+type TokenResponse = {
+  access_token: string
+  refresh_token: string
+  token_type: string
+  expires_at: string
+  user: User
+}
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...options.headers,
+type MfaChallenge = {
+  mfa_required: true
+  mfa_token: string
+}
+
+type LoginResponse = TokenResponse | MfaChallenge
+
+export type SignInResult =
+  | { user: User; mfaToken: null; error: null }
+  | { user: null; mfaToken: string; error: null }
+  | { user: null; mfaToken: null; error: string }
+
+const isBrowser = () => typeof window !== 'undefined'
+
+function storeSession(response: TokenResponse) {
+  localStorage.setItem(ACCESS_TOKEN_KEY, response.access_token)
+  localStorage.setItem(REFRESH_TOKEN_KEY, response.refresh_token)
+  localStorage.setItem(USER_KEY, JSON.stringify(response.user))
+}
+
+function clearSession() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  localStorage.removeItem(USER_KEY)
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof ApiError ? error.message : fallback
+}
+
+async function rawRequest<T>(endpoint: string, options: RequestInit, accessToken: string | null): Promise<T> {
+  const headers = new Headers(options.headers)
+  headers.set('Content-Type', 'application/json')
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
   }
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
+  let response: Response
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
+    response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
+  } catch {
+    throw new ApiError('Network error or server unavailable')
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    throw new ApiError(
+      errorData.error || `Request failed with status ${response.status}`,
+      response.status,
+      errorData
+    )
+  }
+
+  return await response.json()
+}
+
+// Un solo refresh en curso aunque varias requests reciban 401 a la vez
+let refreshPromise: Promise<boolean> | null = null
+
+async function refreshSession(): Promise<boolean> {
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
+  if (!refreshToken) return false
+
+  refreshPromise ??= rawRequest<TokenResponse>(
+    '/auth/refresh',
+    { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) },
+    null
+  )
+    .then((response) => {
+      storeSession(response)
+      return true
+    })
+    .catch(() => {
+      clearSession()
+      return false
+    })
+    .finally(() => {
+      refreshPromise = null
     })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new ApiError(
-        errorData.error || `Request failed with status ${response.status}`,
-        response.status,
-        errorData
-      )
-    }
+  return refreshPromise
+}
 
-    return await response.json()
+// Hace una request autenticada; si el access token expiró, lo renueva y reintenta una vez
+async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = isBrowser() ? localStorage.getItem(ACCESS_TOKEN_KEY) : null
+
+  try {
+    return await rawRequest<T>(endpoint, options, token)
   } catch (error) {
-    if (error instanceof ApiError) {
-      throw error
-    }
-    throw new ApiError('Network error or server unavailable')
+    if (!(error instanceof ApiError) || error.status !== 401 || !isBrowser()) throw error
+    if (!(await refreshSession())) throw error
+    return await rawRequest<T>(endpoint, options, localStorage.getItem(ACCESS_TOKEN_KEY))
   }
 }
 
 // Autenticación
 export const auth = {
-  async signIn(email: string, password: string) {
+  // Primer factor. Si el usuario tiene MFA activo devuelve mfaToken y hay que llamar a verifyMfa.
+  async signIn(email: string, password: string): Promise<SignInResult> {
     try {
-      const response = await apiRequest<{
-        success: boolean
-        sessionToken: string
-        user: User
-      }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      })
+      const response = await rawRequest<LoginResponse>(
+        '/auth/login',
+        { method: 'POST', body: JSON.stringify({ email, password }) },
+        null
+      )
 
-      if (response.success && response.sessionToken) {
-        localStorage.setItem('session_token', response.sessionToken)
-        localStorage.setItem('user', JSON.stringify(response.user))
-        return { user: response.user, error: null }
+      if ('mfa_required' in response) {
+        return { user: null, mfaToken: response.mfa_token, error: null }
       }
 
-      return { user: null, error: 'Login failed' }
+      storeSession(response)
+      return { user: response.user, mfaToken: null, error: null }
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Login failed'
-      return { user: null, error: message }
+      return { user: null, mfaToken: null, error: errorMessage(error, 'Login failed') }
     }
   },
 
-  async signUp(email: string, password: string, metadata?: Record<string, any>) {
+  // Segundo factor: código TOTP de 6 dígitos o un código de recuperación
+  async verifyMfa(mfaToken: string, code: string) {
     try {
-      const response = await apiRequest<{
-        success: boolean
-        userId: string
-      }>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          email,
-          password,
-          metadata: metadata || {}
-        }),
-      })
-
-      if (response.success) {
-        // Auto-login después del registro
-        return await this.signIn(email, password)
-      }
-
-      return { user: null, error: 'Registration failed' }
+      const response = await rawRequest<TokenResponse>(
+        '/auth/mfa/verify',
+        { method: 'POST', body: JSON.stringify({ mfa_token: mfaToken, code }) },
+        null
+      )
+      storeSession(response)
+      return { user: response.user, error: null }
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Registration failed'
-      return { user: null, error: message }
+      return { user: null, error: errorMessage(error, 'Verification failed') }
+    }
+  },
+
+  async signUp(email: string, password: string, metadata?: Record<string, unknown>): Promise<SignInResult> {
+    try {
+      await rawRequest<{ success: boolean; userId: string }>(
+        '/auth/register',
+        { method: 'POST', body: JSON.stringify({ email, password, metadata: metadata || {} }) },
+        null
+      )
+      // Auto-login después del registro (un usuario nuevo no tiene MFA)
+      return await this.signIn(email, password)
+    } catch (error) {
+      return { user: null, mfaToken: null, error: errorMessage(error, 'Registration failed') }
     }
   },
 
   async signOut() {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
     try {
-      const token = localStorage.getItem('session_token')
-      if (token) {
-        await apiRequest('/auth/logout', {
-          method: 'POST',
-        })
+      if (refreshToken) {
+        await rawRequest('/auth/logout', { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) }, null)
       }
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('user')
+      clearSession()
     }
     return { error: null }
   },
 
+  // Obtiene el usuario actual desde el servidor (valida la sesión)
   async getUser(): Promise<{ user: User | null; error: string | null }> {
-    try {
-      const userStr = localStorage.getItem('user')
-      if (!userStr) {
-        return { user: null, error: null }
-      }
-
-      // Validar que el token siga siendo válido
-      const response = await apiRequest<{
-        valid: boolean
-        user: User
-      }>('/auth/validate', {
-        method: 'GET',
-      })
-
-      if (response.valid) {
-        return { user: response.user, error: null }
-      }
-
-      // Si el token no es válido, limpiar
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('user')
-      return { user: null, error: 'Session expired' }
-    } catch (error) {
-      localStorage.removeItem('session_token')
-      localStorage.removeItem('user')
+    if (!localStorage.getItem(REFRESH_TOKEN_KEY)) {
       return { user: null, error: null }
+    }
+    try {
+      const user = await apiRequest<User>('/auth/me')
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+      return { user, error: null }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearSession()
+        return { user: null, error: 'Session expired' }
+      }
+      return { user: null, error: errorMessage(error, 'Failed to fetch user') }
     }
   },
 
   getCurrentUser(): User | null {
-    if (typeof window === 'undefined') return null
-    const userStr = localStorage.getItem('user')
+    if (!isBrowser()) return null
+    const userStr = localStorage.getItem(USER_KEY)
     return userStr ? JSON.parse(userStr) : null
-  }
+  },
+}
+
+// MFA (TOTP)
+export const mfa = {
+  // Genera un secreto nuevo; queda pendiente hasta confirmarlo con enable()
+  async setup() {
+    try {
+      const data = await apiRequest<{ secret: string; otpauth_url: string }>('/auth/mfa/setup', { method: 'POST' })
+      return { data, error: null }
+    } catch (error) {
+      return { data: null, error: errorMessage(error, 'Failed to start MFA setup') }
+    }
+  },
+
+  // Confirma el setup; devuelve los códigos de recuperación (se muestran una sola vez)
+  async enable(code: string) {
+    try {
+      const data = await apiRequest<{ recovery_codes: string[] }>('/auth/mfa/enable', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      })
+      return { data, error: null }
+    } catch (error) {
+      return { data: null, error: errorMessage(error, 'Failed to enable MFA') }
+    }
+  },
+
+  async disable(password: string, code: string) {
+    try {
+      await apiRequest('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ password, code }) })
+      return { error: null }
+    } catch (error) {
+      return { error: errorMessage(error, 'Failed to disable MFA') }
+    }
+  },
 }
 
 // Base de datos - Trips
@@ -353,7 +441,7 @@ export const db = {
         const data = await apiRequest<PlacePhoto[]>(`/trips/${tripId}/photos`)
         return { data, error: null }
       } catch (error) {
-        return { data: [] as PlacePhoto[], error: null }
+        return { data: [] as PlacePhoto[], error: errorMessage(error, 'Failed to fetch photos') }
       }
     },
     async getByPlaceId(placeId: string) {
@@ -361,7 +449,7 @@ export const db = {
         const data = await apiRequest<PlacePhoto[]>(`/places/${placeId}/photos`)
         return { data, error: null }
       } catch (error) {
-        return { data: [] as PlacePhoto[], error: null }
+        return { data: [] as PlacePhoto[], error: errorMessage(error, 'Failed to fetch photos') }
       }
     },
     async create(photo: { place_id: string; photo_url: string; caption?: string | null }) {

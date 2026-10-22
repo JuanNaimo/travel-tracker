@@ -2,53 +2,46 @@
 
 Frontend de la aplicación Travel Tracker construido con Next.js 16.
 
-## Cambios Realizados - Migración de Supabase a API Local
+Se conecta al API en Go (`../back`) mediante [lib/api-client.ts](lib/api-client.ts).
 
-El frontend ha sido actualizado para conectarse a un backend PostgreSQL local en lugar de Supabase:
+## Autenticación
 
-### 1. Nuevo Cliente API ([lib/api-client.ts](lib/api-client.ts))
-- Reemplaza `lib/supabase-client.ts`
-- Gestión de autenticación con JWT/tokens de sesión
-- Funciones para operaciones CRUD de trips y places
-- Manejo de errores mejorado
-
-### 2. Componentes Actualizados
-Todos los componentes ahora usan `@/lib/api-client`:
-- `components/auth-form.tsx` - Login/registro con API
-- `components/create-trip-dialog.tsx` - Usa user_id dinámico
-- `components/add-place-dialog.tsx` - Usa user_id dinámico
-- `app/dashboard/*.tsx` - Importan desde api-client
-- `components/*.tsx` - Tipos desde api-client
+- **JWT**: el login devuelve un access token (15 min) y un refresh token. `api-client`
+  agrega el access token en cada request y, si el API responde 401, lo renueva con el
+  refresh token y reintenta una vez (un solo refresh en curso aunque haya varias requests).
+- **MFA**: si el usuario tiene la verificación en dos pasos activa, `auth-form` pide el
+  código de 6 dígitos (o un código de recuperación) después de la contraseña.
+- **Configuración de MFA**: botón **Seguridad** en el dashboard
+  ([components/mfa-settings-dialog.tsx](components/mfa-settings-dialog.tsx)): muestra el QR,
+  confirma el código y entrega los códigos de recuperación.
 
 ## Configuración
 
 ### Variables de Entorno
 
-Copia `.env.example` como `.env.local`:
+Crea `.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ```
 
-### Usuario Demo
-
-- **Email**: demo@traveltracker.com
-- **Contraseña**: Demo123456!
-
 ## Desarrollo Local
 
 ```bash
 # Instalar dependencias
-pnpm install
+npm install
 
 # Modo desarrollo
-pnpm dev
+npm run dev
 
-# Build de producción
-pnpm build
+# Lint
+npm run lint
+
+# Build de producción (falla si hay errores de tipos)
+npm run build
 
 # Ejecutar producción
-pnpm start
+npm start
 ```
 
 La aplicación estará disponible en [http://localhost:3000](http://localhost:3000)
@@ -67,9 +60,13 @@ docker build -t travel-tracker-front .
 docker run -d \
   --name travel-front \
   -p 3000:3000 \
-  -e NEXT_PUBLIC_API_URL=http://localhost:3001/api \
   travel-tracker-front
 ```
+
+> `NEXT_PUBLIC_API_URL` se incrusta en el bundle durante `npm run build`: pasarla con `-e`
+> al ejecutar el contenedor no tiene efecto. Pasala al construir:
+> `docker build --build-arg NEXT_PUBLIC_API_URL=https://api.ejemplo.com/api -t travel-tracker-front .`
+> (docker-compose ya la toma del `.env`).
 
 ## Estructura del Proyecto
 
@@ -95,8 +92,11 @@ front/
 ```typescript
 import { auth } from '@/lib/api-client'
 
-// Login
-const { user, error } = await auth.signIn(email, password)
+// Login (primer factor)
+const { user, mfaToken, error } = await auth.signIn(email, password)
+
+// Si mfaToken no es null, completar con el código TOTP o de recuperación
+const { user, error } = await auth.verifyMfa(mfaToken, code)
 
 // Registro
 const { user, error } = await auth.signUp(email, password, metadata)
@@ -104,8 +104,19 @@ const { user, error } = await auth.signUp(email, password, metadata)
 // Logout
 await auth.signOut()
 
-// Obtener usuario actual
+// Usuario guardado localmente / validado contra el API
 const user = auth.getCurrentUser()
+const { user, error } = await auth.getUser()
+```
+
+### MFA
+
+```typescript
+import { mfa } from '@/lib/api-client'
+
+const { data } = await mfa.setup()          // { secret, otpauth_url }
+const { data } = await mfa.enable(code)     // { recovery_codes }
+const { error } = await mfa.disable(password, code)
 ```
 
 ### Base de Datos
@@ -120,6 +131,10 @@ const { data, error } = await db.trips.create(tripData)
 // Places
 const { data, error } = await db.places.getAll()
 const { data, error } = await db.places.getByTripId(tripId)
+
+// Fotos
+const { data, error } = await db.photos.getByTripId(tripId)
+const { data, error } = await db.photos.create({ place_id, photo_url, caption })
 ```
 
 ## Tecnologías
@@ -130,6 +145,7 @@ const { data, error } = await db.places.getByTripId(tripId)
 - **Tailwind CSS 4** - Estilos
 - **Radix UI** - Componentes accesibles
 - **Leaflet** - Mapas interactivos
+- **qrcode.react** - Código QR para configurar MFA
 - **Lucide React** - Iconos
 
 ## Características

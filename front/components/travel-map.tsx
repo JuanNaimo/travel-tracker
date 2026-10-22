@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import type { Place, Trip } from "@/lib/api-client"
+import type { LeafletMouseEvent, Map as LeafletMap, Marker } from "leaflet"
 
 interface TravelMapProps {
   places: Place[]
@@ -43,6 +44,16 @@ const getTripColor = (tripId: string, trips: Trip[] = []): string => {
   return index >= 0 ? TRIP_COLORS[index % TRIP_COLORS.length] : "#3B82F6"
 }
 
+// Los popups de Leaflet se arman con HTML: escapar los datos ingresados por el usuario
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
 export function TravelMap({
   places,
   trips = [],
@@ -53,9 +64,9 @@ export function TravelMap({
   enableAddMode = false,
 }: TravelMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markersRef = useRef<any[]>([])
-  const tempMarkerRef = useRef<any>(null)
+  const mapInstanceRef = useRef<LeafletMap | null>(null)
+  const markersRef = useRef<Marker[]>([])
+  const tempMarkerRef = useRef<Marker | null>(null)
 
   useEffect(() => {
     if (typeof window === "undefined" || !mapRef.current) return
@@ -63,8 +74,10 @@ export function TravelMap({
     const loadLeaflet = async () => {
       const L = (await import("leaflet")).default
 
+      if (!mapRef.current) return
+
       if (!mapInstanceRef.current) {
-        mapInstanceRef.current = L.map(mapRef.current!).setView([center.lat, center.lng], zoom)
+        mapInstanceRef.current = L.map(mapRef.current).setView([center.lat, center.lng], zoom)
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -72,7 +85,8 @@ export function TravelMap({
         }).addTo(mapInstanceRef.current)
 
         if (enableAddMode && onMapClick) {
-          mapInstanceRef.current.on("contextmenu", (e: any) => {
+          const map = mapInstanceRef.current
+          map.on("contextmenu", (e: LeafletMouseEvent) => {
             const { lat, lng } = e.latlng
 
             // Remove previous temporary marker
@@ -88,7 +102,7 @@ export function TravelMap({
               iconAnchor: [16, 16],
             })
 
-            tempMarkerRef.current = L.marker([lat, lng], { icon: tempIcon }).addTo(mapInstanceRef.current)
+            tempMarkerRef.current = L.marker([lat, lng], { icon: tempIcon }).addTo(map)
 
             tempMarkerRef.current.bindPopup("Nuevo lugar - Completa el formulario para guardar").openPopup()
 
@@ -96,6 +110,8 @@ export function TravelMap({
           })
         }
       }
+
+      const map = mapInstanceRef.current
 
       // Limpiar marcadores existentes
       markersRef.current.forEach((marker) => marker.remove())
@@ -115,12 +131,12 @@ export function TravelMap({
             iconAnchor: [12, 12],
           })
 
-          const marker = L.marker([place.latitude, place.longitude], { icon: customIcon }).addTo(mapInstanceRef.current)
+          const marker = L.marker([place.latitude, place.longitude], { icon: customIcon }).addTo(map)
 
           const popupContent = `
             <div class="p-2 min-w-[200px]">
-              <div class="font-semibold text-base mb-1">${place.name}</div>
-              ${place.description ? `<p class="text-sm text-gray-600 mb-2">${place.description}</p>` : ""}
+              <div class="font-semibold text-base mb-1">${escapeHtml(place.name)}</div>
+              ${place.description ? `<p class="text-sm text-gray-600 mb-2">${escapeHtml(place.description)}</p>` : ""}
               ${place.rating ? `<div class="flex gap-1 mb-2 text-yellow-500">${"★".repeat(place.rating)}${"☆".repeat(5 - place.rating)}</div>` : ""}
               ${place.expenses > 0 ? `<p class="text-sm"><strong>Gastos:</strong> $${place.expenses}</p>` : ""}
             </div>
@@ -130,7 +146,7 @@ export function TravelMap({
 
           marker.on("click", () => {
             // Centrar el mapa en el marcador con animación suave
-            mapInstanceRef.current.flyTo([place.latitude, place.longitude], 12, {
+            map.flyTo([place.latitude, place.longitude], 12, {
               duration: 1.5,
             })
 
@@ -143,7 +159,7 @@ export function TravelMap({
           bounds.extend([place.latitude, place.longitude])
         })
 
-        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] })
+        map.fitBounds(bounds, { padding: [50, 50] })
       }
     }
 

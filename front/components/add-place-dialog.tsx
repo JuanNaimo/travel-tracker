@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -52,7 +52,10 @@ export function AddPlaceDialog({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const setOpen = onOpenChange || setInternalOpen
 
-  useEffect(() => {
+  // Sincroniza las coordenadas cuando cambian desde el mapa (ajuste de estado durante el render)
+  const [prevCoordinates, setPrevCoordinates] = useState(initialCoordinates)
+  if (initialCoordinates !== prevCoordinates) {
+    setPrevCoordinates(initialCoordinates)
     if (initialCoordinates) {
       setFormData((prev) => ({
         ...prev,
@@ -60,7 +63,7 @@ export function AddPlaceDialog({
         longitude: initialCoordinates.longitude.toString(),
       }))
     }
-  }, [initialCoordinates])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { db, type Place, type Trip } from "@/lib/api-client"
 import { TravelMap } from "@/components/travel-map"
 import { Button } from "@/components/ui/button"
@@ -14,14 +14,21 @@ import { AddPlaceDialog } from "@/components/add-place-dialog"
 export default function MapPage() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [places, setPlaces] = useState<Place[]>([])
-  const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([])
   const [selectedTripId, setSelectedTripId] = useState<string>("all")
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ latitude: number; longitude: number } | null>(null)
   const [showAddPlaceDialog, setShowAddPlaceDialog] = useState(false)
 
+  const loadData = async () => {
+    const [tripsResult, placesResult] = await Promise.all([db.trips.getAll(), db.places.getAll()])
+
+    if (tripsResult.data) setTrips(tripsResult.data)
+    if (placesResult.data) setPlaces(placesResult.data)
+  }
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos remotos
     loadData()
     const link = document.createElement("link")
     link.rel = "stylesheet"
@@ -31,20 +38,10 @@ export default function MapPage() {
     link.onload = () => setMapReady(true)
   }, [])
 
-  useEffect(() => {
-    if (selectedTripId === "all") {
-      setFilteredPlaces(places)
-    } else {
-      setFilteredPlaces(places.filter((p) => p.trip_id === selectedTripId))
-    }
-  }, [selectedTripId, places])
-
-  const loadData = async () => {
-    const [tripsResult, placesResult] = await Promise.all([db.trips.getAll(), db.places.getAll()])
-
-    if (tripsResult.data) setTrips(tripsResult.data)
-    if (placesResult.data) setPlaces(placesResult.data)
-  }
+  const filteredPlaces = useMemo(
+    () => (selectedTripId === "all" ? places : places.filter((p) => p.trip_id === selectedTripId)),
+    [selectedTripId, places]
+  )
 
   const handleMapClick = (coordinates: { latitude: number; longitude: number }) => {
     setSelectedCoordinates(coordinates)

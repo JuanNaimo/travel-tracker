@@ -9,12 +9,24 @@ import { Input } from "@/components/ui/input"
 import { db, type PlacePhoto } from "@/lib/api-client"
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const
-const MAX_SIZE = 10 * 1024 * 1024
+// Las fotos se guardan embebidas (data URL) en la base de datos: limitar el tamaño
+const MAX_SIZE = 5 * 1024 * 1024
 
 const photoFileSchema = z.object({
   type: z.enum(ACCEPTED_TYPES, { message: "Formato no válido. Usa JPEG, PNG, WebP o GIF." }),
-  size: z.number().max(MAX_SIZE, "El archivo no puede superar los 10 MB."),
+  size: z.number().max(MAX_SIZE, "El archivo no puede superar los 5 MB."),
 })
+
+// Convierte el archivo a data URL para persistirlo (una blob: URL solo vive en la pestaña actual)
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    // readAsDataURL siempre produce un string en result
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
 
 interface PhotoUploadProps {
   placeId: string
@@ -46,7 +58,14 @@ export function PhotoUpload({ placeId, onSuccess }: PhotoUploadProps) {
     if (!selectedFile) return
     setLoading(true)
 
-    const photoUrl = URL.createObjectURL(selectedFile)
+    let photoUrl: string
+    try {
+      photoUrl = await readAsDataUrl(selectedFile)
+    } catch {
+      setLoading(false)
+      toast.error("No se pudo leer el archivo.")
+      return
+    }
     const { data, error } = await db.photos.create({
       place_id: placeId,
       photo_url: photoUrl,

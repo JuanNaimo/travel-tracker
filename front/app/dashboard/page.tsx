@@ -7,6 +7,7 @@ import { CreateTripDialog } from "@/components/create-trip-dialog"
 import { Button } from "@/components/ui/button"
 import { MapPin, LogOut } from "lucide-react"
 import { auth } from "@/lib/api-client"
+import { MfaSettingsDialog } from "@/components/mfa-settings-dialog"
 import Link from "next/link"
 
 export default function DashboardPage() {
@@ -15,7 +16,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   const loadTrips = async () => {
-    setLoading(true)
     const [tripsResult, placesResult] = await Promise.all([db.trips.getAll(), db.places.getAll()])
     if (tripsResult.data) setTrips(tripsResult.data)
     if (placesResult.data) setPlaces(placesResult.data)
@@ -23,6 +23,11 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    if (!auth.getCurrentUser()) {
+      window.location.href = "/"
+      return
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de datos remotos
     loadTrips()
   }, [])
 
@@ -58,6 +63,7 @@ export default function DashboardPage() {
               <Link href="/dashboard/map">
                 <Button variant="outline">Ver Mapa</Button>
               </Link>
+              <MfaSettingsDialog />
               <Button variant="ghost" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Salir
