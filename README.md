@@ -23,7 +23,9 @@ Aplicación completa para rastrear y organizar tus viajes alrededor del mundo, c
 - **Gestión de viajes y lugares** con categorías
 - **Sistema de calificaciones** por estrellas
 - **Seguimiento de gastos** por lugar
-- **Álbum de fotos** por lugar
+- **Diario de viaje** día por día, con fotos, descripción y cómo estuvo cada día
+- **Álbum de fotos** por viaje y galería de todas las fotos
+- **Diseño adaptable**: barra inferior en el celular y menú lateral en la compu, con modo oscuro
 - **Docker Compose** para deployment fácil
 
 ## Estructura del Proyecto
@@ -184,6 +186,7 @@ npm run dev
 - `GET /api/trips/{id}/photos` - Fotos de todos los lugares de un viaje
 - `GET /api/places/{id}/photos` - Fotos de un lugar
 - `POST /api/places/{id}/photos` - Agregar foto (`photo_url` como data URL base64 o URL https)
+- `GET /api/photos` - Todas las fotos del usuario
 - `DELETE /api/photos/{id}` - Eliminar foto
 
 ### Health Check
@@ -351,7 +354,7 @@ docker compose up -d
 - [x] Agregar refresh token rotation
 - [x] Verificación en dos pasos (TOTP)
 - [x] API de fotos para lugares
-- [ ] Montar el álbum de fotos en una página de viaje
+- [x] Montar el álbum de fotos en una página de viaje
 - [ ] Guardar fotos en un object storage en lugar de la base de datos
 - [ ] Exportar viajes a PDF
 - [ ] Compartir viajes públicamente

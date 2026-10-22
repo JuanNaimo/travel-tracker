@@ -11,7 +11,7 @@ import (
 )
 
 const placeColumns = `id, trip_id, user_id, name, description, category,
-	latitude, longitude, rating, visit_date, expenses, created_at, updated_at`
+	latitude, longitude, rating, to_char(visit_date, 'YYYY-MM-DD'), expenses, created_at, updated_at`
 
 func scanPlace(row rowScanner, place *models.Place) error {
 	return row.Scan(

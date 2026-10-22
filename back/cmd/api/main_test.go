@@ -35,6 +35,7 @@ func TestRoutes(t *testing.T) {
 		{"DELETE", "/api/places/" + id},
 		{"GET", "/api/places/" + id + "/photos"},
 		{"POST", "/api/places/" + id + "/photos"},
+		{"GET", "/api/photos"},
 		{"DELETE", "/api/photos/" + id},
 		{"GET", "/health"},
 	}
