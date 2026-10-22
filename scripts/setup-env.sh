@@ -1,5 +1,4 @@
 #!/bin/sh
-# Crea .env a partir de .env.example con secretos aleatorios. No pisa un .env existente.
 set -e
 cd "$(dirname "$0")/.."
 

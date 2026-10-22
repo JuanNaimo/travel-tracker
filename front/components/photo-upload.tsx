@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { db, type PlacePhoto } from "@/lib/api-client"
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const
-// Las fotos se guardan embebidas (data URL) en la base de datos: limitar el tamaño
 const MAX_SIZE = 5 * 1024 * 1024
 
 const photoFileSchema = z.object({
@@ -17,7 +16,7 @@ const photoFileSchema = z.object({
   size: z.number().max(MAX_SIZE, "El archivo no puede superar los 5 MB."),
 })
 
-// Convierte el archivo a data URL para persistirlo (una blob: URL solo vive en la pestaña actual)
+// Una blob: URL solo vive en la pestaña actual; se persiste como data URL
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

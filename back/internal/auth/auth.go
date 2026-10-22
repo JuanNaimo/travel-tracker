@@ -37,27 +37,22 @@ var (
 	ErrMFANotSetUp        = errors.New("MFA setup has not been started")
 )
 
-// dummyHash se compara cuando el email no existe, para que la respuesta tarde
-// lo mismo y no permita enumerar usuarios por tiempo de respuesta.
+// Evita enumerar emails por tiempo de respuesta
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), BcryptCost)
 
-// NormalizeEmail normaliza un email para guardarlo y buscarlo
 func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
-// HashPassword genera un hash bcrypt de la contraseña
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	return string(bytes), err
 }
 
-// CheckPassword verifica si la contraseña coincide con el hash
 func CheckPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
-// GenerateToken genera un token aleatorio seguro (256 bits, hex)
 func GenerateToken() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -66,14 +61,12 @@ func GenerateToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// hashToken devuelve el SHA-256 de un token aleatorio. No hace falta bcrypt
-// porque los tokens tienen alta entropía; solo evitamos guardarlos en claro.
+// SHA-256 alcanza: los tokens son aleatorios de alta entropía
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
 
-// CreateUser crea un nuevo usuario en la base de datos
 func CreateUser(email, password string, metadata map[string]interface{}) (string, error) {
 	hashedPassword, err := HashPassword(password)
 	if err != nil {
@@ -127,7 +120,6 @@ func scanUser(row *sql.Row) (*models.User, error) {
 	return &user, nil
 }
 
-// GetUserByEmail obtiene un usuario activo por su email
 func GetUserByEmail(email string) (*models.User, error) {
 	return scanUser(database.DB.QueryRow(
 		`SELECT `+userColumns+` FROM users WHERE email = $1 AND deleted_at IS NULL`,
@@ -135,7 +127,6 @@ func GetUserByEmail(email string) (*models.User, error) {
 	))
 }
 
-// GetUserByID obtiene un usuario activo por su ID
 func GetUserByID(id string) (*models.User, error) {
 	return scanUser(database.DB.QueryRow(
 		`SELECT `+userColumns+` FROM users WHERE id = $1 AND deleted_at IS NULL`, id,
@@ -146,7 +137,6 @@ func isBanned(user *models.User) bool {
 	return user.BannedUntil != nil && user.BannedUntil.After(time.Now())
 }
 
-// CheckCredentials valida email y contraseña (primer factor)
 func CheckCredentials(email, password string) (*models.User, error) {
 	user, err := GetUserByEmail(email)
 	if err == ErrUserNotFound {
@@ -166,8 +156,6 @@ func CheckCredentials(email, password string) (*models.User, error) {
 	return user, nil
 }
 
-// IssueTokens emite un access token y un refresh token nuevo (nueva familia).
-// Se llama cuando el usuario completó todos los factores requeridos.
 func IssueTokens(user *models.User) (*models.TokenResponse, error) {
 	if _, err := database.DB.Exec(`UPDATE users SET last_sign_in_at = NOW() WHERE id = $1`, user.ID); err != nil {
 		return nil, err
@@ -210,8 +198,7 @@ func issueTokenPair(db execer, user *models.User, familyID string) (*models.Toke
 	}, nil
 }
 
-// RotateRefreshToken canjea un refresh token por un par nuevo. Si el token ya
-// fue usado (posible robo), revoca todos los tokens de esa familia.
+// Reutilizar un token ya rotado (posible robo) revoca toda la familia.
 func RotateRefreshToken(refreshToken string) (*models.TokenResponse, error) {
 	tx, err := database.DB.Begin()
 	if err != nil {
@@ -236,7 +223,6 @@ func RotateRefreshToken(refreshToken string) (*models.TokenResponse, error) {
 	}
 
 	if revoked {
-		// Reutilización de un token ya rotado: invalidar la sesión completa
 		if _, err := tx.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE family_id = $1`, familyID); err != nil {
 			return nil, err
 		}
@@ -273,7 +259,6 @@ func RotateRefreshToken(refreshToken string) (*models.TokenResponse, error) {
 	return resp, nil
 }
 
-// RevokeRefreshToken revoca la sesión (familia) a la que pertenece el token (logout)
 func RevokeRefreshToken(refreshToken string) error {
 	_, err := database.DB.Exec(`
 		UPDATE refresh_tokens SET revoked = TRUE
@@ -282,13 +267,11 @@ func RevokeRefreshToken(refreshToken string) error {
 	return err
 }
 
-// RevokeAllRefreshTokens cierra todas las sesiones del usuario
 func RevokeAllRefreshTokens(userID string) error {
 	_, err := database.DB.Exec(`UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1`, userID)
 	return err
 }
 
-// VerifySecondFactor valida un código TOTP o, si no lo es, un código de recuperación
 func VerifySecondFactor(user *models.User, code string) error {
 	if !user.MFAEnabled || user.MFASecret == nil {
 		return ErrMFANotEnabled
@@ -334,7 +317,6 @@ func useRecoveryCode(userID, code string) error {
 	return nil
 }
 
-// StartMFASetup genera un secreto TOTP nuevo y lo deja pendiente de confirmación
 func StartMFASetup(user *models.User) (*models.MFASetupResponse, error) {
 	if user.MFAEnabled {
 		return nil, ErrMFAAlreadyEnabled
@@ -354,7 +336,6 @@ func StartMFASetup(user *models.User) (*models.MFASetupResponse, error) {
 	}, nil
 }
 
-// EnableMFA confirma el setup con un código válido y genera códigos de recuperación
 func EnableMFA(user *models.User, code string) ([]string, error) {
 	if user.MFAEnabled {
 		return nil, ErrMFAAlreadyEnabled
@@ -399,7 +380,6 @@ func EnableMFA(user *models.User, code string) ([]string, error) {
 	return codes, nil
 }
 
-// DisableMFA desactiva MFA tras verificar contraseña y segundo factor
 func DisableMFA(user *models.User, password, code string) error {
 	if !user.MFAEnabled {
 		return ErrMFANotEnabled
@@ -428,7 +408,6 @@ func DisableMFA(user *models.User, password, code string) error {
 	return tx.Commit()
 }
 
-// generateRecoveryCodes genera códigos con formato xxxxx-xxxxx (40 bits cada uno)
 func generateRecoveryCodes() ([]string, error) {
 	codes := make([]string, recoveryCodeCount)
 	for i := range codes {

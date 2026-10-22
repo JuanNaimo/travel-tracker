@@ -11,10 +11,8 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// DB es la instancia global de la base de datos
 var DB *sql.DB
 
-// Connect establece la conexión con PostgreSQL
 func Connect() error {
 	host := getEnv("DB_HOST", "localhost")
 	port := getEnv("DB_PORT", "5432")
@@ -39,12 +37,10 @@ func Connect() error {
 		return fmt.Errorf("error opening database: %w", err)
 	}
 
-	// Verificar la conexión
 	if err = DB.Ping(); err != nil {
 		return fmt.Errorf("error connecting to database: %w", err)
 	}
 
-	// Configurar pool de conexiones
 	DB.SetMaxOpenConns(25)
 	DB.SetMaxIdleConns(5)
 
@@ -52,7 +48,6 @@ func Connect() error {
 	return nil
 }
 
-// Close cierra la conexión con la base de datos
 func Close() error {
 	if DB != nil {
 		return DB.Close()
@@ -60,8 +55,7 @@ func Close() error {
 	return nil
 }
 
-// SetUserContext configura el user_id en la transacción para las políticas RLS.
-// set_config(..., true) equivale a SET LOCAL pero admite parámetros.
+// set_config(..., true) equivale a SET LOCAL pero admite parámetros
 func SetUserContext(tx *sql.Tx, userID string) error {
 	_, err := tx.Exec("SELECT set_config('app.current_user_id', $1, true)", userID)
 	return err

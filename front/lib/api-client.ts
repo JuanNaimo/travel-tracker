@@ -1,6 +1,3 @@
-// Cliente de API para conectar con el backend PostgreSQL
-// Reemplaza la implementación mock de Supabase
-
 export type User = {
   id: string
   email: string
@@ -55,14 +52,12 @@ export type PhotoMapTarget = {
   photo: PlacePhoto
 }
 
-// Configuración del API
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
 const USER_KEY = 'user'
 
-// Clase para manejar errores de API
 class ApiError extends Error {
   constructor(
     message: string,
@@ -165,7 +160,6 @@ async function refreshSession(): Promise<boolean> {
   return refreshPromise
 }
 
-// Hace una request autenticada; si el access token expiró, lo renueva y reintenta una vez
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = isBrowser() ? localStorage.getItem(ACCESS_TOKEN_KEY) : null
 
@@ -178,9 +172,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   }
 }
 
-// Autenticación
 export const auth = {
-  // Primer factor. Si el usuario tiene MFA activo devuelve mfaToken y hay que llamar a verifyMfa.
   async signIn(email: string, password: string): Promise<SignInResult> {
     try {
       const response = await rawRequest<LoginResponse>(
@@ -200,7 +192,6 @@ export const auth = {
     }
   },
 
-  // Segundo factor: código TOTP de 6 dígitos o un código de recuperación
   async verifyMfa(mfaToken: string, code: string) {
     try {
       const response = await rawRequest<TokenResponse>(
@@ -222,7 +213,6 @@ export const auth = {
         { method: 'POST', body: JSON.stringify({ email, password, metadata: metadata || {} }) },
         null
       )
-      // Auto-login después del registro (un usuario nuevo no tiene MFA)
       return await this.signIn(email, password)
     } catch (error) {
       return { user: null, mfaToken: null, error: errorMessage(error, 'Registration failed') }
@@ -243,7 +233,6 @@ export const auth = {
     return { error: null }
   },
 
-  // Obtiene el usuario actual desde el servidor (valida la sesión)
   async getUser(): Promise<{ user: User | null; error: string | null }> {
     if (!localStorage.getItem(REFRESH_TOKEN_KEY)) {
       return { user: null, error: null }
@@ -268,9 +257,7 @@ export const auth = {
   },
 }
 
-// MFA (TOTP)
 export const mfa = {
-  // Genera un secreto nuevo; queda pendiente hasta confirmarlo con enable()
   async setup() {
     try {
       const data = await apiRequest<{ secret: string; otpauth_url: string }>('/auth/mfa/setup', { method: 'POST' })
@@ -280,7 +267,6 @@ export const mfa = {
     }
   },
 
-  // Confirma el setup; devuelve los códigos de recuperación (se muestran una sola vez)
   async enable(code: string) {
     try {
       const data = await apiRequest<{ recovery_codes: string[] }>('/auth/mfa/enable', {
@@ -303,7 +289,6 @@ export const mfa = {
   },
 }
 
-// Base de datos - Trips
 export const db = {
   trips: {
     async getAll() {

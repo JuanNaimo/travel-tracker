@@ -1,6 +1,5 @@
 #!/bin/sh
-# Crea el rol sin privilegios con el que se conecta la API.
-# El superusuario (POSTGRES_USER) ignora las políticas RLS; este rol no.
+# Rol de la API: a diferencia de POSTGRES_USER, no saltea las políticas RLS
 set -e
 
 if [ -z "$DB_APP_USER" ] || [ -z "$DB_APP_PASSWORD" ]; then

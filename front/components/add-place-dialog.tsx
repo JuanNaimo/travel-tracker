@@ -52,7 +52,7 @@ export function AddPlaceDialog({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const setOpen = onOpenChange || setInternalOpen
 
-  // Sincroniza las coordenadas cuando cambian desde el mapa (ajuste de estado durante el render)
+  // Ajuste de estado durante el render cuando cambian las coordenadas del mapa
   const [prevCoordinates, setPrevCoordinates] = useState(initialCoordinates)
   if (initialCoordinates !== prevCoordinates) {
     setPrevCoordinates(initialCoordinates)

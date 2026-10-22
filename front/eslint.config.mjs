@@ -11,7 +11,7 @@ export default defineConfig([
     },
   },
   {
-    // Componentes generados por shadcn/ui: se mantienen como vienen del generador
+    // Generados por shadcn/ui
     files: ["components/ui/**"],
     rules: {
       "react-hooks/set-state-in-effect": "off",

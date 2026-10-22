@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// RateLimiter limita intentos por clave en una ventana fija. Es en memoria,
-// suficiente para una única instancia de la API.
+// En memoria: alcanza para una única instancia de la API.
 type RateLimiter struct {
 	mu      sync.Mutex
 	limit   int
@@ -19,12 +18,10 @@ type rateEntry struct {
 	resetAt time.Time
 }
 
-// NewRateLimiter crea un limitador de `limit` intentos cada `window`
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return &RateLimiter{limit: limit, window: window, entries: make(map[string]*rateEntry)}
 }
 
-// Allow registra un intento y devuelve false si la clave superó el límite
 func (rl *RateLimiter) Allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -47,7 +44,6 @@ func (rl *RateLimiter) Allow(key string) bool {
 	return e.count <= rl.limit
 }
 
-// Reset borra los intentos de una clave (por ejemplo, tras un login exitoso)
 func (rl *RateLimiter) Reset(key string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()

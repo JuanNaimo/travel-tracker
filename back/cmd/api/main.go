@@ -29,7 +29,6 @@ func main() {
 		log.Fatalf("Invalid auth configuration: %v", err)
 	}
 
-	// Conectar a la base de datos
 	if err := database.Connect(); err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -37,7 +36,6 @@ func main() {
 
 	r := newRouter()
 
-	// CORS: los tokens viajan en el header Authorization, no en cookies
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins(),
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -69,16 +67,13 @@ func main() {
 	}
 }
 
-// newRouter registra todas las rutas de la API
 func newRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.NotFoundHandler = jsonError(http.StatusNotFound, "Not found")
 	r.MethodNotAllowedHandler = jsonError(http.StatusMethodNotAllowed, "Method not allowed")
 
-	// API routes
 	api := r.PathPrefix("/api").Subrouter()
 
-	// Auth routes (públicas)
 	public := api.NewRoute().Subrouter()
 	public.Use(middleware.MaxBodySize(maxDefaultBodySize))
 	public.HandleFunc("/auth/register", handlers.Register).Methods("POST")
@@ -87,11 +82,9 @@ func newRouter() *mux.Router {
 	public.HandleFunc("/auth/refresh", handlers.Refresh).Methods("POST")
 	public.HandleFunc("/auth/logout", handlers.Logout).Methods("POST")
 
-	// Rutas protegidas (requieren access token JWT)
 	protected := api.NewRoute().Subrouter()
 	protected.Use(middleware.AuthMiddleware)
 
-	// Subidas de fotos: límite de tamaño mayor
 	photoUploads := protected.NewRoute().Subrouter()
 	photoUploads.Use(middleware.MaxBodySize(maxPhotoBodySize))
 	photoUploads.HandleFunc("/places/"+uuidPattern+"/photos", handlers.CreatePlacePhoto).Methods("POST")
@@ -104,7 +97,6 @@ func newRouter() *mux.Router {
 	apiAuth.HandleFunc("/auth/mfa/enable", handlers.EnableMFA).Methods("POST")
 	apiAuth.HandleFunc("/auth/mfa/disable", handlers.DisableMFA).Methods("POST")
 
-	// Trip routes
 	apiAuth.HandleFunc("/trips", handlers.GetAllTrips).Methods("GET")
 	apiAuth.HandleFunc("/trips", handlers.CreateTrip).Methods("POST")
 	apiAuth.HandleFunc("/trips/"+uuidPattern, handlers.GetTripByID).Methods("GET")
@@ -112,7 +104,6 @@ func newRouter() *mux.Router {
 	apiAuth.HandleFunc("/trips/"+uuidPattern, handlers.DeleteTrip).Methods("DELETE")
 	apiAuth.HandleFunc("/trips/"+uuidPattern+"/photos", handlers.GetTripPhotos).Methods("GET")
 
-	// Place routes
 	apiAuth.HandleFunc("/places", handlers.GetAllPlaces).Methods("GET")
 	apiAuth.HandleFunc("/places", handlers.CreatePlace).Methods("POST")
 	apiAuth.HandleFunc("/places/"+uuidPattern, handlers.GetPlaceByID).Methods("GET")
@@ -120,10 +111,8 @@ func newRouter() *mux.Router {
 	apiAuth.HandleFunc("/places/"+uuidPattern, handlers.DeletePlace).Methods("DELETE")
 	apiAuth.HandleFunc("/places/"+uuidPattern+"/photos", handlers.GetPlacePhotos).Methods("GET")
 
-	// Photo routes
 	apiAuth.HandleFunc("/photos/"+uuidPattern, handlers.DeletePhoto).Methods("DELETE")
 
-	// Health check
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -141,7 +130,6 @@ func jsonError(status int, message string) http.Handler {
 	})
 }
 
-// allowedOrigins lee CORS_ALLOWED_ORIGINS (lista separada por comas)
 func allowedOrigins() []string {
 	value := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if value == "" {

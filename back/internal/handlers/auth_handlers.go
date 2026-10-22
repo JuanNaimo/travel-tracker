@@ -14,11 +14,9 @@ import (
 )
 
 var (
-	// Intentos de login cada 15 minutos: 10 por email y 50 por IP
 	loginLimiter   = middleware.NewRateLimiter(10, 15*time.Minute)
 	loginIPLimiter = middleware.NewRateLimiter(50, 15*time.Minute)
-	// 5 intentos de código MFA cada 15 minutos por usuario
-	mfaLimiter = middleware.NewRateLimiter(5, 15*time.Minute)
+	mfaLimiter     = middleware.NewRateLimiter(5, 15*time.Minute)
 )
 
 func clientIP(r *http.Request) string {
@@ -29,7 +27,6 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// Register maneja el registro de nuevos usuarios
 func Register(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateUserRequest
 	if !decodeJSON(w, r, &req) {
@@ -68,8 +65,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Login valida email y contraseña. Si el usuario tiene MFA activo devuelve un
-// desafío (mfa_token) en lugar de los tokens de sesión.
 func Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if !decodeJSON(w, r, &req) {
@@ -111,7 +106,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	issueTokens(w, user)
 }
 
-// VerifyMFA completa el login con un código TOTP o de recuperación
 func VerifyMFA(w http.ResponseWriter, r *http.Request) {
 	var req models.MFAVerifyRequest
 	if !decodeJSON(w, r, &req) {
@@ -160,7 +154,6 @@ func issueTokens(w http.ResponseWriter, user *models.User) {
 	respondJSON(w, http.StatusOK, resp)
 }
 
-// Refresh rota el refresh token y emite un access token nuevo
 func Refresh(w http.ResponseWriter, r *http.Request) {
 	var req models.RefreshRequest
 	if !decodeJSON(w, r, &req) {
@@ -187,7 +180,6 @@ func Refresh(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, resp)
 }
 
-// Logout revoca el refresh token (y toda su familia). El access token expira solo.
 func Logout(w http.ResponseWriter, r *http.Request) {
 	var req models.RefreshRequest
 	if !decodeJSON(w, r, &req) {
@@ -201,7 +193,6 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-// Me devuelve el usuario autenticado
 func Me(w http.ResponseWriter, r *http.Request) {
 	authUser, ok := requireUser(w, r)
 	if !ok {
@@ -232,7 +223,6 @@ func loadCurrentUser(w http.ResponseWriter, r *http.Request) (*models.User, bool
 	return user, true
 }
 
-// SetupMFA genera un secreto TOTP para que el usuario lo agregue a su app autenticadora
 func SetupMFA(w http.ResponseWriter, r *http.Request) {
 	user, ok := loadCurrentUser(w, r)
 	if !ok {
@@ -251,7 +241,6 @@ func SetupMFA(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, resp)
 }
 
-// EnableMFA confirma el setup con un código y devuelve los códigos de recuperación
 func EnableMFA(w http.ResponseWriter, r *http.Request) {
 	user, ok := loadCurrentUser(w, r)
 	if !ok {
@@ -288,7 +277,6 @@ func EnableMFA(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, models.MFAEnableResponse{RecoveryCodes: codes})
 }
 
-// DisableMFA desactiva MFA (requiere contraseña y un código válido)
 func DisableMFA(w http.ResponseWriter, r *http.Request) {
 	user, ok := loadCurrentUser(w, r)
 	if !ok {

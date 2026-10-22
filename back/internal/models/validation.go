@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// PlaceCategories son las categorías válidas para un lugar (coinciden con el frontend)
 var PlaceCategories = map[string]bool{
 	"restaurante": true,
 	"hotel":       true,
@@ -20,7 +19,6 @@ var PlaceCategories = map[string]bool{
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-// IsUUID indica si s tiene formato de UUID
 func IsUUID(s string) bool {
 	return uuidPattern.MatchString(s)
 }
@@ -86,7 +84,6 @@ func validateCategory(category string) error {
 	return nil
 }
 
-// Validate valida un viaje antes de crearlo
 func (t *Trip) Validate() error {
 	return firstError(
 		validateName(t.Name),
@@ -96,7 +93,6 @@ func (t *Trip) Validate() error {
 	)
 }
 
-// Validate valida los campos presentes en una actualización de viaje
 func (u *TripUpdate) Validate() error {
 	var nameErr error
 	if u.Name != nil {
@@ -110,7 +106,6 @@ func (u *TripUpdate) Validate() error {
 	)
 }
 
-// Validate valida un lugar antes de crearlo
 func (p *Place) Validate() error {
 	if !IsUUID(p.TripID) {
 		return errors.New("trip_id must be a valid UUID")
@@ -126,7 +121,6 @@ func (p *Place) Validate() error {
 	)
 }
 
-// Validate valida los campos presentes en una actualización de lugar
 func (u *PlaceUpdate) Validate() error {
 	var errs []error
 	if u.Name != nil {
@@ -148,8 +142,6 @@ func (u *PlaceUpdate) Validate() error {
 	return firstError(errs...)
 }
 
-// allowedPhotoPrefixes son los formatos aceptados para photo_url: imágenes
-// embebidas como data URL (lo que envía el frontend) o URLs https externas.
 var allowedPhotoPrefixes = []string{
 	"data:image/jpeg;base64,",
 	"data:image/png;base64,",
@@ -158,7 +150,6 @@ var allowedPhotoPrefixes = []string{
 	"https://",
 }
 
-// Validate valida una foto antes de guardarla
 func (r *CreatePhotoRequest) Validate() error {
 	valid := false
 	for _, prefix := range allowedPhotoPrefixes {

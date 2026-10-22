@@ -1,22 +1,13 @@
-# Levanta todo el proyecto: PostgreSQL + API Go + Frontend Next.js
-#
-#   make up        (o: ./scripts/setup-env.sh && docker compose up -d --build)
-#
-# Frontend: http://localhost:3000 · API: http://localhost:3001/api
-# Modo desarrollo con recarga en caliente: ver docker-compose.dev.yml (make dev)
-
 services:
-  # Base de datos PostgreSQL
   db:
     build: ./db
     container_name: travel-tracker-db
     restart: unless-stopped
     environment:
-      # Superusuario: solo se usa para crear el esquema
       POSTGRES_USER: ${DB_USER:?Definí DB_USER en .env}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Definí DB_PASSWORD en .env}
       POSTGRES_DB: ${DB_NAME:?Definí DB_NAME en .env}
-      # Rol sin privilegios que usa la API (03-create-app-role.sh), para que RLS aplique
+      # Rol de la API (sin superusuario, para que RLS aplique)
       DB_APP_USER: ${DB_APP_USER:-travel_app}
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Definí DB_APP_PASSWORD en .env}
     ports:
@@ -31,7 +22,6 @@ services:
     networks:
       - travel-network
 
-  # Backend API en Go
   api:
     build: ./back
     container_name: travel-tracker-api
@@ -61,12 +51,11 @@ services:
     networks:
       - travel-network
 
-  # Frontend Next.js
   frontend:
     build:
       context: ./front
       args:
-        # Se incrusta en el bundle: es la URL con la que el navegador llega al API
+        # Se incrusta en el bundle al construir
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
     container_name: travel-tracker-front
     restart: unless-stopped

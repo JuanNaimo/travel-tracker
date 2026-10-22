@@ -21,7 +21,6 @@ func scanPlace(row rowScanner, place *models.Place) error {
 	)
 }
 
-// GetAllPlaces obtiene todos los lugares del usuario, opcionalmente filtrados por viaje
 func GetAllPlaces(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -73,7 +72,6 @@ func GetAllPlaces(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, places)
 }
 
-// GetPlaceByID obtiene un lugar por su ID
 func GetPlaceByID(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -109,7 +107,6 @@ func GetPlaceByID(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, place)
 }
 
-// CreatePlace crea un nuevo lugar dentro de un viaje del usuario
 func CreatePlace(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -138,7 +135,6 @@ func CreatePlace(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// El viaje tiene que pertenecer al usuario
 	var exists bool
 	if err := tx.QueryRow(
 		`SELECT EXISTS (SELECT 1 FROM trips WHERE id = $1 AND user_id = $2)`,
@@ -172,7 +168,6 @@ func CreatePlace(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, place)
 }
 
-// UpdatePlace actualiza los campos enviados de un lugar existente
 func UpdatePlace(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -229,7 +224,6 @@ func UpdatePlace(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, place)
 }
 
-// DeletePlace elimina un lugar (y en cascada sus fotos)
 func DeletePlace(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {

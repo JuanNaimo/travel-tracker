@@ -64,17 +64,14 @@ func listPhotos(w http.ResponseWriter, r *http.Request, filter string) {
 	respondJSON(w, http.StatusOK, photos)
 }
 
-// GetTripPhotos obtiene las fotos de todos los lugares de un viaje
 func GetTripPhotos(w http.ResponseWriter, r *http.Request) {
 	listPhotos(w, r, "p.trip_id")
 }
 
-// GetPlacePhotos obtiene las fotos de un lugar
 func GetPlacePhotos(w http.ResponseWriter, r *http.Request) {
 	listPhotos(w, r, "p.id")
 }
 
-// CreatePlacePhoto agrega una foto a un lugar del usuario
 func CreatePlacePhoto(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -102,7 +99,6 @@ func CreatePlacePhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Inserta solo si el lugar pertenece al usuario
 	var photo models.PlacePhoto
 	err := scanPhoto(tx.QueryRow(`
 		INSERT INTO place_photos AS pp (place_id, photo_url, caption)
@@ -126,7 +122,6 @@ func CreatePlacePhoto(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, photo)
 }
 
-// DeletePhoto elimina una foto de un lugar del usuario
 func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {

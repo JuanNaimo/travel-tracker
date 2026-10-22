@@ -12,8 +12,7 @@ import (
 const (
 	issuer = "travel-tracker-api"
 
-	// Audiencias: un token MFA (emitido tras validar la contraseña) nunca
-	// puede usarse como access token y viceversa.
+	// Audiencias separadas: un token de desafío MFA no sirve como access token
 	audienceAccess = "access"
 	audienceMFA    = "mfa"
 
@@ -23,7 +22,6 @@ const (
 
 var ErrInvalidToken = errors.New("invalid token")
 
-// Config contiene la configuración de JWT y refresh tokens
 type Config struct {
 	Secret     []byte
 	AccessTTL  time.Duration
@@ -32,7 +30,6 @@ type Config struct {
 
 var cfg Config
 
-// Init carga la configuración desde variables de entorno. Debe llamarse al iniciar la API.
 func Init() error {
 	secret := os.Getenv("JWT_SECRET")
 	if len(secret) < minSecretLength {
@@ -64,7 +61,6 @@ func durationEnv(key string, def time.Duration) (time.Duration, error) {
 	return d, nil
 }
 
-// Claims son los claims de los tokens emitidos por la API
 type Claims struct {
 	Email string `json:"email"`
 	jwt.RegisteredClaims
@@ -110,23 +106,19 @@ func parse(tokenString, audience string) (*Claims, error) {
 	return claims, nil
 }
 
-// IssueAccessToken emite un access token de corta duración
 func IssueAccessToken(userID, email string) (string, time.Time, error) {
 	return issue(userID, email, audienceAccess, cfg.AccessTTL)
 }
 
-// ParseAccessToken valida un access token y devuelve sus claims
 func ParseAccessToken(token string) (*Claims, error) {
 	return parse(token, audienceAccess)
 }
 
-// IssueMFAToken emite un token de 5 minutos que solo sirve para completar el segundo factor
 func IssueMFAToken(userID, email string) (string, error) {
 	token, _, err := issue(userID, email, audienceMFA, mfaTokenTTL)
 	return token, err
 }
 
-// ParseMFAToken valida un token de desafío MFA
 func ParseMFAToken(token string) (*Claims, error) {
 	return parse(token, audienceMFA)
 }

@@ -1,11 +1,4 @@
-# Modo desarrollo: código montado desde tu máquina con recarga automática.
-#
-#   make dev
-#   (o: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build)
-#
-# - frontend: `next dev` con hot reload
-# - api: `go run`; se reinicia al guardar cambios en back/ (docker compose watch)
-
+# Modo desarrollo (make dev): código montado y recarga automática.
 services:
   api:
     build: !reset null
@@ -17,7 +10,6 @@ services:
       - go_mod_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     healthcheck:
-      # golang:alpine incluye wget (busybox); la primera compilación tarda
       start_period: 120s
     develop:
       watch:

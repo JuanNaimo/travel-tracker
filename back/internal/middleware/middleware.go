@@ -14,13 +14,11 @@ type contextKey string
 
 const UserContextKey contextKey = "user"
 
-// AuthUser es la identidad extraída del access token
 type AuthUser struct {
 	ID    string
 	Email string
 }
 
-// AuthMiddleware verifica el access token JWT del header Authorization
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := BearerToken(r)
@@ -41,7 +39,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// BearerToken extrae el token de un header "Authorization: Bearer <token>"
 func BearerToken(r *http.Request) (string, bool) {
 	header := r.Header.Get("Authorization")
 	scheme, token, found := strings.Cut(header, " ")
@@ -51,13 +48,11 @@ func BearerToken(r *http.Request) (string, bool) {
 	return token, true
 }
 
-// GetUserFromContext obtiene el usuario autenticado del contexto
 func GetUserFromContext(ctx context.Context) (*AuthUser, bool) {
 	user, ok := ctx.Value(UserContextKey).(*AuthUser)
 	return user, ok
 }
 
-// MaxBodySize limita el tamaño del cuerpo de las requests
 func MaxBodySize(bytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +72,6 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-// Logger registra método, ruta, status y duración de cada request
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

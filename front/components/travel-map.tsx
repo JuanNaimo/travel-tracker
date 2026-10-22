@@ -14,7 +14,6 @@ interface TravelMapProps {
   enableAddMode?: boolean
 }
 
-// Paleta de colores vibrantes para los viajes
 const TRIP_COLORS = [
   "#3B82F6", // blue-500
   "#EF4444", // red-500
@@ -38,7 +37,6 @@ const TRIP_COLORS = [
   "#B45309", // amber-700 (marrón cálido)
 ]
 
-// Función para obtener el color de un viaje basado en su ID
 const getTripColor = (tripId: string, trips: Trip[] = []): string => {
   const index = trips.findIndex((trip) => trip.id === tripId)
   return index >= 0 ? TRIP_COLORS[index % TRIP_COLORS.length] : "#3B82F6"
@@ -89,12 +87,10 @@ export function TravelMap({
           map.on("contextmenu", (e: LeafletMouseEvent) => {
             const { lat, lng } = e.latlng
 
-            // Remove previous temporary marker
             if (tempMarkerRef.current) {
               tempMarkerRef.current.remove()
             }
 
-            // Create temporary marker
             const tempIcon = L.divIcon({
               className: "custom-marker",
               html: `<div class="w-8 h-8 bg-green-500 border-2 border-white rounded-full shadow-lg animate-pulse"></div>`,
@@ -113,11 +109,9 @@ export function TravelMap({
 
       const map = mapInstanceRef.current
 
-      // Limpiar marcadores existentes
       markersRef.current.forEach((marker) => marker.remove())
       markersRef.current = []
 
-      // Crear nuevos marcadores
       if (places.length > 0) {
         const bounds = L.latLngBounds([])
 
@@ -145,7 +139,6 @@ export function TravelMap({
           marker.bindPopup(popupContent)
 
           marker.on("click", () => {
-            // Centrar el mapa en el marcador con animación suave
             map.flyTo([place.latitude, place.longitude], 12, {
               duration: 1.5,
             })

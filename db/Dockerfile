@@ -1,7 +1,6 @@
 FROM postgres:17-alpine
 
-# Scripts de inicialización: se ejecutan en orden alfabético solo cuando el
-# volumen de datos está vacío (primer arranque o después de `docker compose down -v`)
+# Solo se ejecutan con el volumen de datos vacío
 COPY 01-create-tables.sql /docker-entrypoint-initdb.d/
 COPY 02-row-level-security.sql /docker-entrypoint-initdb.d/
 COPY --chmod=755 03-create-app-role.sh /docker-entrypoint-initdb.d/

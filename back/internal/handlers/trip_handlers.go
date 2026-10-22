@@ -24,7 +24,6 @@ func scanTrip(row rowScanner, trip *models.Trip) error {
 	)
 }
 
-// GetAllTrips obtiene todos los viajes del usuario
 func GetAllTrips(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -70,7 +69,6 @@ func GetAllTrips(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, trips)
 }
 
-// GetTripByID obtiene un viaje por su ID
 func GetTripByID(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -106,7 +104,6 @@ func GetTripByID(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, trip)
 }
 
-// CreateTrip crea un nuevo viaje
 func CreateTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -153,7 +150,6 @@ func CreateTrip(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, trip)
 }
 
-// UpdateTrip actualiza los campos enviados de un viaje existente
 func UpdateTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
@@ -208,7 +204,6 @@ func UpdateTrip(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, trip)
 }
 
-// DeleteTrip elimina un viaje (y en cascada sus lugares y fotos)
 func DeleteTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireUser(w, r)
 	if !ok {
