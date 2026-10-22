@@ -1,0 +1,48 @@
+# Modo desarrollo: código montado desde tu máquina con recarga automática.
+#
+#   make dev
+#   (o: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build)
+#
+# - frontend: `next dev` con hot reload
+# - api: `go run`; se reinicia al guardar cambios en back/ (docker compose watch)
+
+services:
+  api:
+    build: !reset null
+    image: golang:1.23-alpine
+    working_dir: /app
+    command: go run ./cmd/api
+    volumes:
+      - ./back:/app
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    healthcheck:
+      # golang:alpine incluye wget (busybox); la primera compilación tarda
+      start_period: 120s
+    develop:
+      watch:
+        - path: ./back
+          action: sync+restart
+          target: /app
+
+  frontend:
+    build: !reset null
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --hostname 0.0.0.0 --port 3000"
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
+      NEXT_TELEMETRY_DISABLED: 1
+      # Detecta cambios en bind mounts de Docker Desktop (macOS/Windows)
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./front:/app
+      # node_modules y .next viven en volúmenes (binarios de Linux, no los de tu máquina)
+      - front_node_modules:/app/node_modules
+      - front_next:/app/.next
+
+volumes:
+  go_mod_cache:
+  go_build_cache:
+  front_node_modules:
+  front_next:

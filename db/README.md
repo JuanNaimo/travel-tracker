@@ -23,6 +23,7 @@ Se ejecutan en orden alfabético la primera vez que arranca el contenedor (volum
 
 1. **01-create-tables.sql**: tablas, índices y triggers
 2. **02-row-level-security.sql**: función `current_user_id()` y políticas RLS (`ENABLE` + `FORCE`)
+3. **03-create-app-role.sh**: crea el rol `DB_APP_USER` (sin superusuario) con permisos de lectura/escritura sobre las tablas; es el que usa la API en Docker
 
 > Si cambia el esquema hay que recrear el volumen: `docker-compose down -v && docker-compose up -d`
 > (borra los datos).
@@ -37,16 +38,9 @@ SELECT set_config('app.current_user_id', '<uuid-del-usuario>', true);  -- equiva
 SELECT * FROM trips;  -- solo devuelve los viajes de ese usuario
 ```
 
-**Importante:** los superusuarios de PostgreSQL ignoran RLS. El usuario que crea el
-contenedor (`POSTGRES_USER`) es superusuario; para que las políticas apliquen en
-producción, crea un rol sin privilegios para la API:
-
-```sql
-CREATE ROLE travel_api LOGIN PASSWORD '...';
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO travel_api;
-```
-
-y usa ese rol en `DB_USER` / `DB_PASSWORD` del backend.
+**Importante:** los superusuarios de PostgreSQL ignoran RLS. Por eso Docker Compose
+conecta la API con el rol `DB_APP_USER` (`travel_app` por defecto), creado por
+`03-create-app-role.sh`, y no con `POSTGRES_USER`.
 
 ## Construcción del Contenedor
 
@@ -68,7 +62,7 @@ docker run -d \
 ## Variables de Entorno
 
 Se configuran en el `.env` de la raíz del repo (ver `.env.example`): `DB_USER`,
-`DB_PASSWORD`, `DB_NAME` y `DB_PORT`.
+`DB_PASSWORD`, `DB_NAME`, `DB_PORT`, `DB_APP_USER` y `DB_APP_PASSWORD`.
 
 ## Mantenimiento
 

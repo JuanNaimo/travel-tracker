@@ -1,24 +1,33 @@
+# Levanta todo el proyecto: PostgreSQL + API Go + Frontend Next.js
+#
+#   make up        (o: ./scripts/setup-env.sh && docker compose up -d --build)
+#
+# Frontend: http://localhost:3000 · API: http://localhost:3001/api
+# Modo desarrollo con recarga en caliente: ver docker-compose.dev.yml (make dev)
 
 services:
   # Base de datos PostgreSQL
   db:
     build: ./db
     container_name: travel-tracker-db
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      # Superusuario: solo se usa para crear el esquema
+      POSTGRES_USER: ${DB_USER:?Definí DB_USER en .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Definí DB_PASSWORD en .env}
+      POSTGRES_DB: ${DB_NAME:?Definí DB_NAME en .env}
+      # Rol sin privilegios que usa la API (03-create-app-role.sh), para que RLS aplique
+      DB_APP_USER: ${DB_APP_USER:-travel_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Definí DB_APP_PASSWORD en .env}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - travel-network
 
@@ -26,31 +35,29 @@ services:
   api:
     build: ./back
     container_name: travel-tracker-api
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
-      PORT: ${PORT:-3001}
+      PORT: 3001
       DB_HOST: db
-      DB_PORT: ${DB_PORT:-5432}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PORT: 5432
+      DB_USER: ${DB_APP_USER:-travel_app}
+      DB_PASSWORD: ${DB_APP_PASSWORD}
       DB_NAME: ${DB_NAME}
       DB_SSLMODE: ${DB_SSLMODE:-disable}
       JWT_SECRET: ${JWT_SECRET:?Definí JWT_SECRET en .env (openssl rand -hex 32)}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
-      ENV: ${ENV:-development}
     ports:
       - "${PORT:-3001}:3001"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
-      interval: 10s
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - travel-network
 
@@ -59,19 +66,15 @@ services:
     build:
       context: ./front
       args:
+        # Se incrusta en el bundle: es la URL con la que el navegador llega al API
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
     container_name: travel-tracker-front
+    restart: unless-stopped
     depends_on:
       api:
         condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      PORT: 3000
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
-      NODE_ENV: ${NODE_ENV:-production}
     ports:
-      - "3000:3000"
+      - "${FRONT_PORT:-3000}:3000"
     networks:
       - travel-network
 

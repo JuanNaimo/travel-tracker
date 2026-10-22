@@ -33,6 +33,7 @@ travel-tracker-app/
 ├── db/                          # Base de datos PostgreSQL
 │   ├── 01-create-tables.sql   # Esquema de tablas
 │   ├── 02-row-level-security.sql  # Políticas RLS
+│   ├── 03-create-app-role.sh  # Rol sin privilegios para la API
 │   ├── Dockerfile             # Build de PostgreSQL
 │   └── README.md              # Documentación de DB
 │
@@ -57,32 +58,65 @@ travel-tracker-app/
 │   └── README.md             # Documentación de Frontend
 │
 ├── docker-compose.yml          # Orquestación de servicios
+├── docker-compose.dev.yml      # Override para desarrollo (hot reload)
+├── Makefile                    # make up / dev / down / reset / test
+├── scripts/setup-env.sh        # Genera .env con secretos aleatorios
 └── README.md                   # Este archivo
 ```
 
 ## Quick Start
 
-### Con Docker Compose (Recomendado)
+### Todo en Docker (Recomendado)
+
+Requisitos: Docker con Docker Compose v2.24 o superior. `make` es opcional.
 
 ```bash
 # 1. Clonar el repositorio
-git clone <repo-url>
-cd travel-tracker-app
+git clone https://github.com/JuanNaimo/travel-tracker.git
+cd travel-tracker
 
-# 2. Configurar variables de entorno
-cp .env.example .env
-# Editar .env: definir DB_PASSWORD y JWT_SECRET (openssl rand -hex 32)
-
-# 3. Levantar todos los servicios
-docker-compose up -d
-
-# 4. Acceder a la aplicación
-# Frontend: http://localhost:3000
-# API: http://localhost:3001
-# DB: localhost:5432
+# 2. Crear .env (con contraseñas y JWT_SECRET aleatorios), construir y levantar
+make up
 ```
 
-### Desarrollo Local
+Sin `make`:
+
+```bash
+./scripts/setup-env.sh          # o: cp .env.example .env y completar los valores vacíos
+docker compose up -d --build
+```
+
+- Frontend: http://localhost:3000
+- API: http://localhost:3001/api
+- PostgreSQL: localhost:5432
+
+La primera vez se crean el esquema y el rol `travel_app` con el que se conecta la API.
+Ese rol no es superusuario, así que las políticas RLS aplican.
+
+| Comando | Qué hace |
+|---|---|
+| `make up` | Construye y levanta db + api + frontend |
+| `make ps` / `make logs` | Estado y logs de los servicios |
+| `make down` | Detiene todo (conserva los datos) |
+| `make reset` | Detiene todo y **borra la base** (necesario si cambia el esquema) |
+| `make dev` | Modo desarrollo: código montado y hot reload del frontend |
+| `make dev-watch` | Igual que `dev`, y además reinicia el API al guardar cambios en `back/` |
+| `make test` | Tests del backend, typecheck y lint del frontend dentro de contenedores |
+
+Los puertos de tu máquina se cambian en `.env` (`FRONT_PORT`, `PORT`, `DB_PORT`). Si cambiás
+`PORT`, ajustá también `NEXT_PUBLIC_API_URL` y volvé a construir el frontend.
+
+### Modo desarrollo en Docker
+
+`make dev` (o `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`)
+usa `docker-compose.dev.yml`:
+
+- **frontend**: `next dev` con el código de `front/` montado; los cambios se ven al instante.
+- **api**: `go run` con el código de `back/` montado. Con `make dev-watch` se reinicia
+  solo al guardar; con `make dev` reinicialo con `docker compose restart api`.
+- **db**: igual que en producción (mismo volumen de datos).
+
+### Desarrollo Local (sin Docker para API y frontend)
 
 #### Base de Datos
 
@@ -162,7 +196,10 @@ Todas se definen en el `.env` de la raíz (ver `.env.example`):
 
 | Variable | Descripción | Default |
 |---|---|---|
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Conexión a PostgreSQL | `localhost`, `5432`, `travel_user`, —, `travel_tracker`, `disable` |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_SSLMODE` | Conexión a PostgreSQL (`DB_PORT` es el puerto en tu máquina) | `localhost`, `5432`, `travel_tracker`, `disable` |
+| `DB_USER`, `DB_PASSWORD` | Superusuario: crea el esquema (y lo usa el API si lo corrés fuera de Docker) | `travel_user`, — |
+| `DB_APP_USER`, `DB_APP_PASSWORD` | Rol sin privilegios que usa el API en Docker | `travel_app`, — |
+| `FRONT_PORT` | Puerto del frontend en tu máquina | `3000` |
 | `PORT` | Puerto del API | `3001` |
 | `JWT_SECRET` | Secreto HS256 para firmar los JWT. **Obligatorio**, mínimo 32 caracteres | — |
 | `JWT_ACCESS_TTL` | Duración del access token | `15m` |
@@ -225,23 +262,23 @@ npm run build     # Build de producción (incluye chequeo de tipos)
 npm run lint      # ESLint
 npm start         # Ejecutar producción
 
-# Docker Compose
-docker-compose up -d              # Levantar servicios
-docker-compose logs -f api        # Ver logs del API
-docker-compose down               # Detener servicios
-docker-compose down -v            # Detener y eliminar volúmenes
+# Docker Compose (equivalentes de make up/logs/down/reset)
+docker compose up -d --build      # Levantar servicios
+docker compose logs -f api        # Ver logs del API
+docker compose down               # Detener servicios
+docker compose down -v            # Detener y eliminar volúmenes
 ```
 
 ### Logs
 
 ```bash
 # Logs de todos los servicios
-docker-compose logs -f
+docker compose logs -f
 
 # Logs de un servicio específico
-docker-compose logs -f db
-docker-compose logs -f api
-docker-compose logs -f frontend
+docker compose logs -f db
+docker compose logs -f api
+docker compose logs -f frontend
 ```
 
 ## Testing
@@ -266,7 +303,7 @@ npx tsc --noEmit
 2. Usar HTTPS en el frontend
 3. Configurar orígenes CORS específicos
 4. Habilitar SSL en PostgreSQL
-5. Conectar el API con un rol de PostgreSQL sin privilegios de superusuario (para que RLS aplique)
+5. Mantener el rol sin privilegios de la API (`DB_APP_USER`) también en producción, para que RLS aplique
 6. Configurar backups de la base de datos
 7. Monitoreo y alertas
 
@@ -284,13 +321,13 @@ La aplicación puede desplegarse en:
 
 ```bash
 # Verificar que PostgreSQL está corriendo
-docker-compose ps
+docker compose ps
 
 # Ver logs
-docker-compose logs db
+docker compose logs db
 
 # Reiniciar servicios
-docker-compose restart db api
+docker compose restart db api
 ```
 
 ### El frontend no se conecta al API
@@ -304,8 +341,8 @@ docker-compose restart db api
 Los scripts SQL solo se ejecutan cuando el volumen de datos está vacío. Si cambió el esquema, reconstruir la base de datos (borra los datos):
 
 ```bash
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 ```
 
 ## Roadmap
