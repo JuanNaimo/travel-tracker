@@ -82,7 +82,7 @@ make up
 Sin `make`:
 
 ```bash
-./scripts/setup-env.sh          # o: cp .env.example .env y completar los valores vacíos
+./scripts/setup-env.sh          # o: cp .env.example .env (valores de ejemplo, solo desarrollo)
 docker compose up -d --build
 ```
 
