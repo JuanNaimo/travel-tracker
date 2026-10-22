@@ -2,190 +2,184 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
+	"log"
 	"net/http"
 
-	"travel-tracker-api/internal/database"
-	"travel-tracker-api/internal/middleware"
 	"travel-tracker-api/internal/models"
 
 	"github.com/gorilla/mux"
 )
 
+const tripColumns = `id, user_id, name, description, start_date, end_date, rating, created_at, updated_at`
+
+type rowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanTrip(row rowScanner, trip *models.Trip) error {
+	return row.Scan(
+		&trip.ID, &trip.UserID, &trip.Name, &trip.Description,
+		&trip.StartDate, &trip.EndDate, &trip.Rating,
+		&trip.CreatedAt, &trip.UpdatedAt,
+	)
+}
+
 // GetAllTrips obtiene todos los viajes del usuario
 func GetAllTrips(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
 
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	// Configurar contexto de usuario para RLS
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
 	rows, err := tx.Query(`
-		SELECT id, user_id, name, description, start_date, end_date, rating, created_at, updated_at
+		SELECT `+tripColumns+`
 		FROM trips
+		WHERE user_id = $1
 		ORDER BY created_at DESC
-	`)
+	`, user.ID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch trips"})
+		respondError(w, http.StatusInternalServerError, "Failed to fetch trips")
 		return
 	}
 	defer rows.Close()
 
-	var trips []models.Trip
+	trips := []models.Trip{}
 	for rows.Next() {
 		var trip models.Trip
-		err := rows.Scan(
-			&trip.ID, &trip.UserID, &trip.Name, &trip.Description,
-			&trip.StartDate, &trip.EndDate, &trip.Rating,
-			&trip.CreatedAt, &trip.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		if err := scanTrip(rows, &trip); err != nil {
+			log.Printf("scan trip: %v", err)
+			respondError(w, http.StatusInternalServerError, "Failed to fetch trips")
+			return
 		}
 		trips = append(trips, trip)
 	}
+	if err := rows.Err(); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to fetch trips")
+		return
+	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, trips)
 }
 
 // GetTripByID obtiene un viaje por su ID
 func GetTripByID(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
+	tripID := mux.Vars(r)["id"]
 
-	vars := mux.Vars(r)
-	tripID := vars["id"]
-
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
 	var trip models.Trip
-	err = tx.QueryRow(`
-		SELECT id, user_id, name, description, start_date, end_date, rating, created_at, updated_at
+	err := scanTrip(tx.QueryRow(`
+		SELECT `+tripColumns+`
 		FROM trips
-		WHERE id = $1
-	`, tripID).Scan(
-		&trip.ID, &trip.UserID, &trip.Name, &trip.Description,
-		&trip.StartDate, &trip.EndDate, &trip.Rating,
-		&trip.CreatedAt, &trip.UpdatedAt,
-	)
+		WHERE id = $1 AND user_id = $2
+	`, tripID, user.ID), &trip)
 
 	if err == sql.ErrNoRows {
-		respondJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Trip not found"})
+		respondError(w, http.StatusNotFound, "Trip not found")
 		return
 	}
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch trip"})
+		respondError(w, http.StatusInternalServerError, "Failed to fetch trip")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, trip)
 }
 
 // CreateTrip crea un nuevo viaje
 func CreateTrip(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
 
 	var trip models.Trip
-	if err := json.NewDecoder(r.Body).Decode(&trip); err != nil {
-		respondJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if !decodeJSON(w, r, &trip) {
+		return
+	}
+	trip.Description = emptyToNil(trip.Description)
+	trip.StartDate = emptyToNil(trip.StartDate)
+	trip.EndDate = emptyToNil(trip.EndDate)
+	if err := trip.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// Asegurar que el user_id es el del usuario autenticado
+	// El dueño siempre es el usuario autenticado, nunca el del cuerpo
 	trip.UserID = user.ID
 
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
-	err = tx.QueryRow(`
+	err := tx.QueryRow(`
 		INSERT INTO trips (user_id, name, description, start_date, end_date, rating)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at
 	`, trip.UserID, trip.Name, trip.Description, trip.StartDate, trip.EndDate, trip.Rating).Scan(
 		&trip.ID, &trip.CreatedAt, &trip.UpdatedAt,
 	)
-
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create trip"})
+		log.Printf("create trip: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to create trip")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusCreated, trip)
 }
 
-// UpdateTrip actualiza un viaje existente
+// UpdateTrip actualiza los campos enviados de un viaje existente
 func UpdateTrip(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+	tripID := mux.Vars(r)["id"]
+
+	var updates models.TripUpdate
+	if !decodeJSON(w, r, &updates) {
+		return
+	}
+	updates.StartDate = emptyToNil(updates.StartDate)
+	updates.EndDate = emptyToNil(updates.EndDate)
+	if err := updates.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	vars := mux.Vars(r)
-	tripID := vars["id"]
-
-	var updates models.Trip
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		respondJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
-		return
-	}
-
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
 	var trip models.Trip
-	err = tx.QueryRow(`
+	err := scanTrip(tx.QueryRow(`
 		UPDATE trips
 		SET name = COALESCE($1, name),
 		    description = COALESCE($2, description),
@@ -193,62 +187,54 @@ func UpdateTrip(w http.ResponseWriter, r *http.Request) {
 		    end_date = COALESCE($4, end_date),
 		    rating = COALESCE($5, rating),
 		    updated_at = NOW()
-		WHERE id = $6
-		RETURNING id, user_id, name, description, start_date, end_date, rating, created_at, updated_at
-	`, updates.Name, updates.Description, updates.StartDate, updates.EndDate, updates.Rating, tripID).Scan(
-		&trip.ID, &trip.UserID, &trip.Name, &trip.Description,
-		&trip.StartDate, &trip.EndDate, &trip.Rating,
-		&trip.CreatedAt, &trip.UpdatedAt,
-	)
+		WHERE id = $6 AND user_id = $7
+		RETURNING `+tripColumns,
+		updates.Name, updates.Description, updates.StartDate, updates.EndDate, updates.Rating,
+		tripID, user.ID), &trip)
 
 	if err == sql.ErrNoRows {
-		respondJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Trip not found"})
+		respondError(w, http.StatusNotFound, "Trip not found")
 		return
 	}
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update trip"})
+		log.Printf("update trip: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update trip")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, trip)
 }
 
-// DeleteTrip elimina un viaje
+// DeleteTrip elimina un viaje (y en cascada sus lugares y fotos)
 func DeleteTrip(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
+	tripID := mux.Vars(r)["id"]
 
-	vars := mux.Vars(r)
-	tripID := vars["id"]
-
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
-	result, err := tx.Exec("DELETE FROM trips WHERE id = $1", tripID)
+	result, err := tx.Exec("DELETE FROM trips WHERE id = $1 AND user_id = $2", tripID, user.ID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete trip"})
+		respondError(w, http.StatusInternalServerError, "Failed to delete trip")
 		return
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		respondJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Trip not found"})
+	if n, _ := result.RowsAffected(); n == 0 {
+		respondError(w, http.StatusNotFound, "Trip not found")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

@@ -15,6 +15,13 @@ ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE places ENABLE ROW LEVEL SECURITY;
 ALTER TABLE place_photos ENABLE ROW LEVEL SECURITY;
 
+-- FORCE hace que las políticas también apliquen al dueño de las tablas.
+-- Ojo: los superusuarios siempre saltean RLS, por eso la API además filtra
+-- explícitamente por user_id en cada query (defensa en profundidad).
+ALTER TABLE trips FORCE ROW LEVEL SECURITY;
+ALTER TABLE places FORCE ROW LEVEL SECURITY;
+ALTER TABLE place_photos FORCE ROW LEVEL SECURITY;
+
 -- Políticas para trips
 CREATE POLICY "Users can view their own trips"
   ON trips FOR SELECT

@@ -4,13 +4,14 @@ Backend REST API para la aplicación Travel Tracker, construido con Go y Postgre
 
 ## Características
 
-- ✅ Autenticación con tokens de sesión
-- ✅ Row Level Security (RLS) en PostgreSQL
-- ✅ Endpoints RESTful para trips y places
-- ✅ Middleware de autenticación
-- ✅ CORS configurado
+- ✅ Autenticación con JWT (access token de 15 min) y refresh tokens rotativos
+- ✅ Verificación en dos pasos (TOTP) con códigos de recuperación
+- ✅ Aislamiento por usuario en cada query + Row Level Security (RLS)
+- ✅ Endpoints RESTful para trips, places y fotos
+- ✅ Validación de datos y límites de tamaño de request
+- ✅ Rate limiting en login y MFA
+- ✅ CORS configurable
 - ✅ Hashing de contraseñas con bcrypt
-- ✅ Validación de sesiones
 - ✅ Multi-stage Docker build
 
 ## Estructura del Proyecto
@@ -19,23 +20,29 @@ Backend REST API para la aplicación Travel Tracker, construido con Go y Postgre
 back/
 ├── cmd/
 │   └── api/
-│       └── main.go           # Punto de entrada de la aplicación
+│       └── main.go              # Punto de entrada y rutas
 ├── internal/
 │   ├── auth/
-│   │   └── auth.go          # Lógica de autenticación
+│   │   ├── auth.go              # Usuarios, refresh tokens y MFA
+│   │   ├── jwt.go               # Emisión y validación de JWT
+│   │   └── totp.go              # TOTP (RFC 6238)
 │   ├── database/
-│   │   └── database.go      # Conexión y utilidades de BD
+│   │   └── database.go          # Conexión y contexto RLS
 │   ├── handlers/
-│   │   ├── auth_handlers.go # Handlers de autenticación
-│   │   ├── trip_handlers.go # Handlers de trips
-│   │   └── place_handlers.go# Handlers de places
+│   │   ├── auth_handlers.go     # Registro, login, MFA, refresh
+│   │   ├── trip_handlers.go     # Handlers de trips
+│   │   ├── place_handlers.go    # Handlers de places
+│   │   ├── photo_handlers.go    # Handlers de fotos
+│   │   └── helpers.go           # Utilidades comunes
 │   ├── middleware/
-│   │   └── middleware.go    # Middlewares (auth, CORS, logger)
+│   │   ├── middleware.go        # Auth JWT, límites de body, logger
+│   │   └── ratelimit.go         # Rate limiter en memoria
 │   └── models/
-│       └── models.go        # Modelos de datos
-├── Dockerfile               # Multi-stage build
-├── go.mod                   # Dependencias
-└── README.md               # Este archivo
+│       ├── models.go            # Modelos de datos
+│       └── validation.go        # Validaciones de entrada
+├── Dockerfile                   # Multi-stage build
+├── go.mod                       # Dependencias
+└── README.md                    # Este archivo
 ```
 
 ## Dependencias
@@ -44,7 +51,7 @@ back/
 - **lib/pq** - Driver PostgreSQL
 - **rs/cors** - Middleware CORS
 - **golang.org/x/crypto** - Bcrypt para hashing
-- **golang-jwt/jwt/v5** - JWT (para futuras mejoras)
+- **golang-jwt/jwt/v5** - Firma y validación de JWT
 
 ## Configuración
 
@@ -52,9 +59,11 @@ back/
 
 ⚠️ **IMPORTANTE**: Este proyecto usa un `.env` centralizado en la raíz.
 
-**NO uses `.env` en esta carpeta**. Todas las variables están en `../env`.
+**NO uses `.env` en esta carpeta**. Todas las variables están en `../.env`
+(ver `../.env.example` y la tabla de variables en el README principal).
 
-Ver [SETUP.md](../SETUP.md) para configuración completa.
+`JWT_SECRET` es obligatorio (mínimo 32 caracteres): la API no arranca sin él.
+Generalo con `openssl rand -hex 32`.
 
 Para desarrollo local:
 ```bash
@@ -71,7 +80,7 @@ make run
 ### Prerequisitos
 
 - Go 1.23 o superior
-- PostgreSQL 18
+- PostgreSQL 17
 - Base de datos configurada (ver carpeta `db/`)
 
 ### Ejecutar en modo desarrollo
@@ -91,82 +100,102 @@ La API estará disponible en `http://localhost:3001`
 ### Autenticación (Públicos)
 
 #### POST /api/auth/register
-Registrar un nuevo usuario
+Registrar un nuevo usuario. La contraseña debe tener entre 8 y 72 caracteres.
 
 **Request:**
 ```json
 {
   "email": "user@example.com",
   "password": "password123",
-  "metadata": {
-    "full_name": "John Doe"
-  }
+  "metadata": { "full_name": "John Doe" }
 }
 ```
 
-**Response:**
+**Response (201):**
 ```json
-{
-  "success": true,
-  "userId": "uuid",
-  "message": "User registered successfully"
-}
+{ "success": true, "userId": "uuid", "message": "User registered successfully" }
 ```
 
 #### POST /api/auth/login
-Iniciar sesión
+Primer factor (email + contraseña).
 
 **Request:**
 ```json
+{ "email": "user@example.com", "password": "password123" }
+```
+
+**Response si el usuario NO tiene MFA:**
+```json
 {
-  "email": "user@example.com",
-  "password": "password123"
+  "access_token": "<jwt>",
+  "refresh_token": "<token opaco>",
+  "token_type": "Bearer",
+  "expires_at": "2026-01-01T00:15:00Z",
+  "user": { "id": "uuid", "email": "user@example.com", "mfa_enabled": false, "created_at": "..." }
 }
 ```
 
-**Response:**
+**Response si el usuario tiene MFA:**
 ```json
-{
-  "success": true,
-  "sessionToken": "token",
-  "refreshToken": "refresh_token",
-  "expiresAt": "2024-01-01T00:00:00Z",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "user_metadata": {}
-  }
-}
+{ "mfa_required": true, "mfa_token": "<jwt de 5 minutos>" }
+```
+
+#### POST /api/auth/mfa/verify
+Segundo factor. `code` puede ser el código TOTP de 6 dígitos o un código de recuperación.
+
+**Request:**
+```json
+{ "mfa_token": "<jwt>", "code": "123456" }
+```
+
+**Response:** igual al login sin MFA (access + refresh token).
+
+#### POST /api/auth/refresh
+Canjea el refresh token por un par nuevo (el anterior queda revocado). Si se presenta
+un refresh token ya usado, se revoca toda la sesión.
+
+**Request:**
+```json
+{ "refresh_token": "<token>" }
 ```
 
 #### POST /api/auth/logout
-Cerrar sesión (requiere autenticación)
+Revoca el refresh token. El access token deja de servir cuando expira (15 min por defecto).
 
-**Headers:**
-```
-Authorization: Bearer <token>
+**Request:**
+```json
+{ "refresh_token": "<token>" }
 ```
 
 ### Autenticación (Protegidos)
 
-#### GET /api/auth/validate
-Validar sesión actual
+Todas las rutas protegidas requieren:
+```
+Authorization: Bearer <access_token>
+```
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+#### GET /api/auth/me
+Devuelve el usuario autenticado (incluye `mfa_enabled`).
+
+#### POST /api/auth/mfa/setup
+Genera un secreto TOTP pendiente de confirmación.
 
 **Response:**
 ```json
-{
-  "valid": true,
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com"
-  }
-}
+{ "secret": "BASE32...", "otpauth_url": "otpauth://totp/Travel%20Tracker:user@example.com?..." }
 ```
+
+El frontend muestra `otpauth_url` como código QR.
+
+#### POST /api/auth/mfa/enable
+Confirma el setup con un código de la app y activa MFA.
+
+**Request:** `{ "code": "123456" }`
+
+**Response:** `{ "recovery_codes": ["a1b2c-3d4e5", "..."] }` (10 códigos de un solo uso; se muestran una única vez)
+
+#### POST /api/auth/mfa/disable
+**Request:** `{ "password": "...", "code": "123456" }`
 
 ### Trips (Requieren Autenticación)
 
@@ -231,6 +260,23 @@ Actualizar un lugar
 #### DELETE /api/places/{id}
 Eliminar un lugar
 
+### Fotos (Requieren Autenticación)
+
+#### GET /api/trips/{id}/photos
+Fotos de todos los lugares de un viaje.
+
+#### GET /api/places/{id}/photos
+Fotos de un lugar.
+
+#### POST /api/places/{id}/photos
+**Request:**
+```json
+{ "photo_url": "data:image/jpeg;base64,...", "caption": "Opcional, máx. 200 caracteres" }
+```
+`photo_url` acepta data URLs base64 (jpeg, png, webp, gif) o URLs `https://`. El body puede pesar hasta 8 MB.
+
+#### DELETE /api/photos/{id}
+
 ### Health Check
 
 #### GET /health
@@ -264,21 +310,25 @@ docker run -d \
 
 ## Seguridad
 
-### Row Level Security (RLS)
+### Aislamiento de datos
 
-El backend utiliza RLS de PostgreSQL para asegurar que los usuarios solo puedan acceder a sus propios datos:
+Cada query filtra explícitamente por el `user_id` del access token. Además, cada
+transacción configura `app.current_user_id` (vía `set_config`) para las políticas
+RLS de PostgreSQL, que actúan como segunda barrera.
 
-1. Cada request autenticado ejecuta: `SET LOCAL app.current_user_id = <user_id>`
-2. Las políticas RLS en PostgreSQL filtran automáticamente los datos
-3. No es posible acceder a datos de otros usuarios
+> RLS no aplica a superusuarios. En producción conectá la API con un rol sin
+> privilegios de superusuario para que las políticas también estén activas.
 
 ### Autenticación
 
-- Contraseñas hasheadas con bcrypt (cost factor 10)
-- Tokens de sesión aleatorios de 32 bytes
-- Sesiones expiran después de 7 días
-- Refresh tokens expiran después de 30 días
-- Validación de sesión en cada request protegido
+- Contraseñas hasheadas con bcrypt (cost 12)
+- Access token JWT (HS256) de 15 minutos; se valida firma, algoritmo, issuer, audiencia y expiración
+- Refresh token aleatorio (256 bits) de 30 días, guardado como hash SHA-256 y rotado en cada uso,
+  con detección de reutilización (revoca la sesión completa)
+- Token de desafío MFA de 5 minutos con audiencia propia: no sirve como access token
+- TOTP con ventana de ±30 s y protección contra reutilización del mismo código
+- 10 códigos de recuperación de un solo uso (guardados como hash)
+- Rate limiting en memoria: 10 logins por email y 50 por IP cada 15 min; 5 intentos de código MFA cada 15 min
 
 ## Testing
 
@@ -312,28 +362,33 @@ CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
 3. Verifica que la base de datos `travel_tracker` exista
 4. Verifica que los scripts SQL se hayan ejecutado
 
-### Error "function create_user does not exist"
+### Error "relation ... does not exist" o columnas faltantes
 
-Las funciones de PostgreSQL no están creadas. Ejecuta los scripts:
+Los scripts SQL no se ejecutaron o el esquema cambió. Ejecuta los scripts sobre una base vacía:
 ```bash
 psql -U travel_user -d travel_tracker -f db/01-create-tables.sql
 psql -U travel_user -d travel_tracker -f db/02-row-level-security.sql
-psql -U travel_user -d travel_tracker -f db/04-auth-functions.sql
 ```
+
+### La API no arranca: "JWT_SECRET must be set"
+
+Define `JWT_SECRET` en el `.env` de la raíz con al menos 32 caracteres (`openssl rand -hex 32`).
 
 ### CORS errors
 
-El middleware CORS ya está configurado para aceptar cualquier origen (`*`). En producción, configura orígenes específicos en `cmd/api/main.go`.
+Agrega el origen del frontend a `CORS_ALLOWED_ORIGINS` (lista separada por comas).
 
 ## Próximas Mejoras
 
-- [ ] Implementar JWT en lugar de tokens de sesión
-- [ ] Agregar rate limiting
-- [ ] Implementar refresh token rotation
+- [x] Implementar JWT en lugar de tokens de sesión
+- [x] Agregar rate limiting
+- [x] Implementar refresh token rotation
+- [x] Verificación en dos pasos (TOTP)
+- [ ] Cifrar el secreto TOTP en la base de datos
 - [ ] Agregar logs estructurados (logrus/zap)
 - [ ] Agregar métricas (Prometheus)
 - [ ] Implementar recuperación de contraseña
-- [ ] Agregar tests unitarios e integración
+- [ ] Agregar tests de integración contra PostgreSQL
 - [ ] Documentación con Swagger/OpenAPI
 
 ## Licencia

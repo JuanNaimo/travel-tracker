@@ -2,80 +2,93 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"travel-tracker-api/internal/auth"
-	"travel-tracker-api/internal/models"
 )
 
 type contextKey string
 
 const UserContextKey contextKey = "user"
 
-// AuthMiddleware verifica que el usuario esté autenticado
+// AuthUser es la identidad extraída del access token
+type AuthUser struct {
+	ID    string
+	Email string
+}
+
+// AuthMiddleware verifica el access token JWT del header Authorization
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, `{"error":"No authorization header"}`, http.StatusUnauthorized)
+		token, ok := BearerToken(r)
+		if !ok {
+			writeJSONError(w, http.StatusUnauthorized, "Missing or invalid authorization header")
 			return
 		}
 
-		// Extraer token del header "Bearer <token>"
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, `{"error":"Invalid authorization header"}`, http.StatusUnauthorized)
-			return
-		}
-
-		token := parts[1]
-
-		// Validar sesión
-		user, isValid, err := auth.ValidateSession(token)
+		claims, err := auth.ParseAccessToken(token)
 		if err != nil {
-			http.Error(w, `{"error":"Session validation failed"}`, http.StatusInternalServerError)
+			writeJSONError(w, http.StatusUnauthorized, "Invalid or expired token")
 			return
 		}
 
-		if !isValid || user == nil {
-			http.Error(w, `{"error":"Invalid or expired session"}`, http.StatusUnauthorized)
-			return
-		}
-
-		// Agregar usuario al contexto
+		user := &AuthUser{ID: claims.Subject, Email: claims.Email}
 		ctx := context.WithValue(r.Context(), UserContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// GetUserFromContext obtiene el usuario del contexto
-func GetUserFromContext(ctx context.Context) (*models.User, bool) {
-	user, ok := ctx.Value(UserContextKey).(*models.User)
+// BearerToken extrae el token de un header "Authorization: Bearer <token>"
+func BearerToken(r *http.Request) (string, bool) {
+	header := r.Header.Get("Authorization")
+	scheme, token, found := strings.Cut(header, " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" {
+		return "", false
+	}
+	return token, true
+}
+
+// GetUserFromContext obtiene el usuario autenticado del contexto
+func GetUserFromContext(ctx context.Context) (*AuthUser, bool) {
+	user, ok := ctx.Value(UserContextKey).(*AuthUser)
 	return user, ok
 }
 
-// CORS middleware
-func CORS(next http.Handler) http.Handler {
+// MaxBodySize limita el tamaño del cuerpo de las requests
+func MaxBodySize(bytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, bytes)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusRecorder) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+// Logger registra método, ruta, status y duración de cada request
+func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rec.status, time.Since(start))
 	})
 }
 
-// Logger middleware
-func Logger(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Log request
-		// log.Printf("%s %s", r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write([]byte(`{"error":"` + message + `"}`))
 }

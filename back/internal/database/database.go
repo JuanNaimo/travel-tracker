@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 
 	_ "github.com/lib/pq"
@@ -21,10 +23,15 @@ func Connect() error {
 	dbname := getEnv("DB_NAME", "travel_tracker")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode,
-	)
+	// Se arma como URL para que valores vacíos o con espacios no rompan el parseo
+	connURL := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(user, password),
+		Host:     net.JoinHostPort(host, port),
+		Path:     dbname,
+		RawQuery: url.Values{"sslmode": {sslmode}}.Encode(),
+	}
+	connStr := connURL.String()
 
 	var err error
 	DB, err = sql.Open("postgres", connStr)
@@ -53,12 +60,10 @@ func Close() error {
 	return nil
 }
 
-// SetUserContext configura el user_id en la sesión de PostgreSQL para RLS
+// SetUserContext configura el user_id en la transacción para las políticas RLS.
+// set_config(..., true) equivale a SET LOCAL pero admite parámetros.
 func SetUserContext(tx *sql.Tx, userID string) error {
-	// Note: SET LOCAL doesn't support parameterized queries, so we use fmt.Sprintf
-	// The userID should be a UUID, so we're safe from SQL injection
-	query := fmt.Sprintf("SET LOCAL app.current_user_id = '%s'", userID)
-	_, err := tx.Exec(query)
+	_, err := tx.Exec("SELECT set_config('app.current_user_id', $1, true)", userID)
 	return err
 }
 

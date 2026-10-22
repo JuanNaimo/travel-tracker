@@ -2,158 +2,157 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
+	"log"
 	"net/http"
 
-	"travel-tracker-api/internal/database"
-	"travel-tracker-api/internal/middleware"
 	"travel-tracker-api/internal/models"
 
 	"github.com/gorilla/mux"
 )
 
-// GetAllPlaces obtiene todos los lugares del usuario
+const placeColumns = `id, trip_id, user_id, name, description, category,
+	latitude, longitude, rating, visit_date, expenses, created_at, updated_at`
+
+func scanPlace(row rowScanner, place *models.Place) error {
+	return row.Scan(
+		&place.ID, &place.TripID, &place.UserID, &place.Name, &place.Description,
+		&place.Category, &place.Latitude, &place.Longitude, &place.Rating,
+		&place.VisitDate, &place.Expenses, &place.CreatedAt, &place.UpdatedAt,
+	)
+}
+
+// GetAllPlaces obtiene todos los lugares del usuario, opcionalmente filtrados por viaje
 func GetAllPlaces(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
 
 	tripID := r.URL.Query().Get("trip_id")
+	if tripID != "" && !models.IsUUID(tripID) {
+		respondError(w, http.StatusBadRequest, "Invalid trip_id")
+		return
+	}
 
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
-	var rows *sql.Rows
-	if tripID != "" {
-		rows, err = tx.Query(`
-			SELECT id, trip_id, user_id, name, description, category,
-			       latitude, longitude, rating, visit_date, expenses, created_at, updated_at
-			FROM places
-			WHERE trip_id = $1
-			ORDER BY created_at DESC
-		`, tripID)
-	} else {
-		rows, err = tx.Query(`
-			SELECT id, trip_id, user_id, name, description, category,
-			       latitude, longitude, rating, visit_date, expenses, created_at, updated_at
-			FROM places
-			ORDER BY created_at DESC
-		`)
-	}
-
+	rows, err := tx.Query(`
+		SELECT `+placeColumns+`
+		FROM places
+		WHERE user_id = $1 AND ($2 = '' OR trip_id::text = $2)
+		ORDER BY created_at DESC
+	`, user.ID, tripID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch places"})
+		respondError(w, http.StatusInternalServerError, "Failed to fetch places")
 		return
 	}
 	defer rows.Close()
 
-	var places []models.Place
+	places := []models.Place{}
 	for rows.Next() {
 		var place models.Place
-		err := rows.Scan(
-			&place.ID, &place.TripID, &place.UserID, &place.Name, &place.Description,
-			&place.Category, &place.Latitude, &place.Longitude, &place.Rating,
-			&place.VisitDate, &place.Expenses, &place.CreatedAt, &place.UpdatedAt,
-		)
-		if err != nil {
-			continue
+		if err := scanPlace(rows, &place); err != nil {
+			log.Printf("scan place: %v", err)
+			respondError(w, http.StatusInternalServerError, "Failed to fetch places")
+			return
 		}
 		places = append(places, place)
 	}
+	if err := rows.Err(); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to fetch places")
+		return
+	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, places)
 }
 
 // GetPlaceByID obtiene un lugar por su ID
 func GetPlaceByID(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
+	placeID := mux.Vars(r)["id"]
 
-	vars := mux.Vars(r)
-	placeID := vars["id"]
-
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
 	var place models.Place
-	err = tx.QueryRow(`
-		SELECT id, trip_id, user_id, name, description, category,
-		       latitude, longitude, rating, visit_date, expenses, created_at, updated_at
+	err := scanPlace(tx.QueryRow(`
+		SELECT `+placeColumns+`
 		FROM places
-		WHERE id = $1
-	`, placeID).Scan(
-		&place.ID, &place.TripID, &place.UserID, &place.Name, &place.Description,
-		&place.Category, &place.Latitude, &place.Longitude, &place.Rating,
-		&place.VisitDate, &place.Expenses, &place.CreatedAt, &place.UpdatedAt,
-	)
+		WHERE id = $1 AND user_id = $2
+	`, placeID, user.ID), &place)
 
 	if err == sql.ErrNoRows {
-		respondJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Place not found"})
+		respondError(w, http.StatusNotFound, "Place not found")
 		return
 	}
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch place"})
+		respondError(w, http.StatusInternalServerError, "Failed to fetch place")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, place)
 }
 
-// CreatePlace crea un nuevo lugar
+// CreatePlace crea un nuevo lugar dentro de un viaje del usuario
 func CreatePlace(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
 
 	var place models.Place
-	if err := json.NewDecoder(r.Body).Decode(&place); err != nil {
-		respondJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if !decodeJSON(w, r, &place) {
+		return
+	}
+	if place.Category == "" {
+		place.Category = "otros"
+	}
+	place.Description = emptyToNil(place.Description)
+	place.VisitDate = emptyToNil(place.VisitDate)
+	if err := place.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// Asegurar que el user_id es el del usuario autenticado
 	place.UserID = user.ID
 
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
+	// El viaje tiene que pertenecer al usuario
+	var exists bool
+	if err := tx.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM trips WHERE id = $1 AND user_id = $2)`,
+		place.TripID, user.ID,
+	).Scan(&exists); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to create place")
+		return
+	}
+	if !exists {
+		respondError(w, http.StatusNotFound, "Trip not found")
 		return
 	}
 
-	err = tx.QueryRow(`
+	err := tx.QueryRow(`
 		INSERT INTO places (trip_id, user_id, name, description, category, latitude, longitude, rating, visit_date, expenses)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at
@@ -161,115 +160,102 @@ func CreatePlace(w http.ResponseWriter, r *http.Request) {
 		place.Latitude, place.Longitude, place.Rating, place.VisitDate, place.Expenses).Scan(
 		&place.ID, &place.CreatedAt, &place.UpdatedAt,
 	)
-
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create place"})
+		log.Printf("create place: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to create place")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusCreated, place)
 }
 
-// UpdatePlace actualiza un lugar existente
+// UpdatePlace actualiza los campos enviados de un lugar existente
 func UpdatePlace(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+	placeID := mux.Vars(r)["id"]
+
+	var updates models.PlaceUpdate
+	if !decodeJSON(w, r, &updates) {
+		return
+	}
+	updates.VisitDate = emptyToNil(updates.VisitDate)
+	if err := updates.Validate(); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	vars := mux.Vars(r)
-	placeID := vars["id"]
-
-	var updates models.Place
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		respondJSON(w, http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
-		return
-	}
-
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
 	var place models.Place
-	err = tx.QueryRow(`
+	err := scanPlace(tx.QueryRow(`
 		UPDATE places
-		SET name = COALESCE(NULLIF($1, ''), name),
+		SET name = COALESCE($1, name),
 		    description = COALESCE($2, description),
-		    category = COALESCE(NULLIF($3, ''), category),
-		    latitude = COALESCE(NULLIF($4, 0), latitude),
-		    longitude = COALESCE(NULLIF($5, 0), longitude),
+		    category = COALESCE($3, category),
+		    latitude = COALESCE($4, latitude),
+		    longitude = COALESCE($5, longitude),
 		    rating = COALESCE($6, rating),
 		    visit_date = COALESCE($7, visit_date),
-		    expenses = COALESCE(NULLIF($8, 0), expenses),
+		    expenses = COALESCE($8, expenses),
 		    updated_at = NOW()
-		WHERE id = $9
-		RETURNING id, trip_id, user_id, name, description, category,
-		          latitude, longitude, rating, visit_date, expenses, created_at, updated_at
-	`, updates.Name, updates.Description, updates.Category, updates.Latitude, updates.Longitude,
-		updates.Rating, updates.VisitDate, updates.Expenses, placeID).Scan(
-		&place.ID, &place.TripID, &place.UserID, &place.Name, &place.Description,
-		&place.Category, &place.Latitude, &place.Longitude, &place.Rating,
-		&place.VisitDate, &place.Expenses, &place.CreatedAt, &place.UpdatedAt,
-	)
+		WHERE id = $9 AND user_id = $10
+		RETURNING `+placeColumns,
+		updates.Name, updates.Description, updates.Category, updates.Latitude, updates.Longitude,
+		updates.Rating, updates.VisitDate, updates.Expenses, placeID, user.ID), &place)
 
 	if err == sql.ErrNoRows {
-		respondJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Place not found"})
+		respondError(w, http.StatusNotFound, "Place not found")
 		return
 	}
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update place"})
+		log.Printf("update place: %v", err)
+		respondError(w, http.StatusInternalServerError, "Failed to update place")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, place)
 }
 
-// DeletePlace elimina un lugar
+// DeletePlace elimina un lugar (y en cascada sus fotos)
 func DeletePlace(w http.ResponseWriter, r *http.Request) {
-	user, ok := middleware.GetUserFromContext(r.Context())
+	user, ok := requireUser(w, r)
 	if !ok {
-		respondJSON(w, http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 		return
 	}
+	placeID := mux.Vars(r)["id"]
 
-	vars := mux.Vars(r)
-	placeID := vars["id"]
-
-	tx, err := database.DB.Begin()
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Database error"})
+	tx, ok := beginUserTx(w, user.ID)
+	if !ok {
 		return
 	}
 	defer tx.Rollback()
 
-	if err := database.SetUserContext(tx, user.ID); err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to set user context"})
-		return
-	}
-
-	result, err := tx.Exec("DELETE FROM places WHERE id = $1", placeID)
+	result, err := tx.Exec("DELETE FROM places WHERE id = $1 AND user_id = $2", placeID, user.ID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete place"})
+		respondError(w, http.StatusInternalServerError, "Failed to delete place")
 		return
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		respondJSON(w, http.StatusNotFound, models.ErrorResponse{Error: "Place not found"})
+	if n, _ := result.RowsAffected(); n == 0 {
+		respondError(w, http.StatusNotFound, "Place not found")
 		return
 	}
 
-	tx.Commit()
+	if !commit(w, tx) {
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

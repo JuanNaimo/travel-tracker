@@ -7,7 +7,6 @@ RUN apk add --no-cache postgresql-contrib
 # Los scripts se ejecutan en orden alfabético
 COPY 01-create-tables.sql /docker-entrypoint-initdb.d/
 COPY 02-row-level-security.sql /docker-entrypoint-initdb.d/
-COPY 03-auth-functions.sql /docker-entrypoint-initdb.d/
 
 # Exponer el puerto de PostgreSQL
 EXPOSE 5432
