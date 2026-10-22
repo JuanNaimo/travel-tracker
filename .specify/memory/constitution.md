@@ -1,25 +1,18 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: [UNVERSIONED TEMPLATE] → 1.0.0
-Modified principles: N/A (initial ratification — all sections new)
-Added sections:
-  - Core Principles (I–V)
-  - Technology Stack Constraints
-  - Development Workflow
-  - Governance
-Removed sections: N/A (template placeholders replaced)
+Version change: 1.0.0 → 2.0.0
+Modified principles:
+  - IV. "Mock-First, Then Real Backend" → "API Contract & Ownership" (redefined: the
+    backend is a Go API + PostgreSQL, not Supabase; the mock client was removed)
+Modified sections:
+  - Technology Stack Constraints: Backend, Auth
 Templates reviewed:
-  - .specify/templates/plan-template.md         ✅ compatible (Constitution Check section present)
-  - .specify/templates/spec-template.md         ✅ compatible (user stories, requirements align)
-  - .specify/templates/tasks-template.md        ✅ compatible (phase structure aligns with principles)
-  - .specify/templates/agent-file-template.md   ✅ compatible (no outdated principle references)
-  - .specify/templates/constitution-template.md ✅ source template, no changes needed
-Follow-up TODOs:
-  - TODO(RATIFICATION_DATE): Using project initialization date (2026-03-26) as ratification date.
-    Update if the project predates this conversation.
-  - TODO(SUPABASE_MIGRATION): Principle IV references the mock→Supabase migration path.
-    Remove the mock-first caveat once Supabase is fully integrated.
+  - .specify/templates/plan-template.md         ✅ compatible
+  - .specify/templates/spec-template.md         ✅ compatible
+  - .specify/templates/tasks-template.md        ✅ compatible
+  - .specify/templates/agent-file-template.md   ✅ compatible
+Follow-up TODOs: none
 -->
 
 # Travel Tracker App Constitution
@@ -52,8 +45,8 @@ Type errors caught at compile time prevent silent corruption of travel records.
 
 ### III. User Data Integrity
 
-Trip and Place records MUST be validated by a Zod schema before any persistence call
-(mock or real database).
+Trip and Place records MUST be validated by a Zod schema before being sent to the API,
+and validated again by the API before persistence.
 Delete operations on Trips MUST cascade-delete all child Places — no orphaned place records.
 Latitude/longitude MUST be validated as numeric values within valid WGS-84 ranges
 (lat: −90 to 90, lng: −180 to 180).
@@ -63,18 +56,19 @@ Ratings MUST be integers in the range 1–5 or null (unrated).
 **Rationale**: Corrupt or orphaned travel data silently degrades the user experience
 (broken map pins, wrong expense totals). Validation MUST be explicit and centralized.
 
-### IV. Mock-First, Then Real Backend
+### IV. API Contract & Ownership
 
-New data features MUST be implemented against the mock client in
-`front/lib/supabase-client.ts` first and verified working before Supabase integration.
-The mock client MUST mirror the same function signatures and return shapes that the real
-Supabase client will use — no mock-specific APIs.
-Supabase Row-Level Security (RLS) policies MUST be defined and tested for every table
-before disabling mock mode for that table.
+The frontend MUST only call endpoints that exist in the Go API (`back/`); a new data
+feature is not done until both sides are implemented and the types in
+`front/lib/api-client.ts` match the Go models.
+Every API query on user data MUST filter by the authenticated `user_id` taken from the
+access token — never from the request body. PostgreSQL RLS policies MUST also exist for
+every user-data table as a second layer, but MUST NOT be the only protection.
+Request bodies MUST be validated in the API (ranges, formats, sizes) even when the
+frontend already validates them.
 
-**Rationale**: The backend is currently mocked. Enforcing interface parity between mock
-and real client makes the migration safe and non-breaking. RLS is mandatory because this
-is a multi-user SaaS app at its target state.
+**Rationale**: This is a multi-user app. Client-side validation and RLS alone are easy to
+bypass (RLS does not apply to superusers), so ownership is enforced explicitly at the API.
 
 ### V. Simplicity
 
@@ -100,7 +94,10 @@ and maintainability with no offsetting team benefit.
   for user-facing forms.
 - **Maps**: Leaflet (`react-leaflet` or direct) for interactive maps;
   Google Maps types for geocoding/search only.
-- **Backend**: Supabase (PostgreSQL + Auth + Storage). Local mock during development.
+- **Backend**: Go API (`back/`, gorilla/mux) + PostgreSQL 17 (`db/`), orchestrated with
+  Docker Compose.
+- **Auth**: JWT access tokens (short-lived) + rotating refresh tokens; optional TOTP MFA.
+  Tokens MUST NOT be accepted outside their audience (access vs. MFA challenge).
 - **Date handling**: `date-fns` — no `moment.js`, no `dayjs`, no `new Date()` formatting
   in render paths.
 
@@ -139,4 +136,4 @@ informal conventions. When a conflict arises, the constitution wins.
 **Compliance review**: Every feature plan's Constitution Check section serves as the
 per-feature compliance review. No separate audit process is required at this project scale.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-26 | **Last Amended**: 2026-03-26
+**Version**: 2.0.0 | **Ratified**: 2026-03-26 | **Last Amended**: 2026-10-22

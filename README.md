@@ -7,7 +7,7 @@ Aplicación completa para rastrear y organizar tus viajes alrededor del mundo, c
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Frontend      │────▶│   Backend API   │────▶│   PostgreSQL    │
-│   Next.js 16    │     │   Go 1.23       │     │   v18 Alpine    │
+│   Next.js 16    │     │   Go 1.23       │     │   v17 Alpine    │
 │   Port: 3000    │     │   Port: 3001    │     │   Port: 5432    │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
@@ -16,12 +16,14 @@ Aplicación completa para rastrear y organizar tus viajes alrededor del mundo, c
 
 - **Frontend moderno** con Next.js 16 y React 19
 - **Backend robusto** en Go con PostgreSQL
-- **Autenticación completa** con sesiones y tokens
+- **Autenticación con JWT** (access token corto + refresh token rotativo)
+- **Verificación en dos pasos (MFA)** con TOTP y códigos de recuperación
 - **Row Level Security (RLS)** para seguridad de datos
 - **Mapas interactivos** con OpenStreetMap/Leaflet
 - **Gestión de viajes y lugares** con categorías
 - **Sistema de calificaciones** por estrellas
 - **Seguimiento de gastos** por lugar
+- **Álbum de fotos** por lugar
 - **Docker Compose** para deployment fácil
 
 ## Estructura del Proyecto
@@ -31,15 +33,13 @@ travel-tracker-app/
 ├── db/                          # Base de datos PostgreSQL
 │   ├── 01-create-tables.sql   # Esquema de tablas
 │   ├── 02-row-level-security.sql  # Políticas RLS
-│   ├── 03-seed-demo-data.sql  # Datos de ejemplo
-│   ├── 04-auth-functions.sql  # Funciones de autenticación
 │   ├── Dockerfile             # Build de PostgreSQL
 │   └── README.md              # Documentación de DB
 │
 ├── back/                       # Backend API en Go
 │   ├── cmd/api/               # Punto de entrada
 │   ├── internal/              # Código interno
-│   │   ├── auth/             # Lógica de autenticación
+│   │   ├── auth/             # JWT, TOTP (MFA) y refresh tokens
 │   │   ├── database/         # Conexión a DB
 │   │   ├── handlers/         # HTTP handlers
 │   │   ├── middleware/       # Middlewares
@@ -70,7 +70,8 @@ git clone <repo-url>
 cd travel-tracker-app
 
 # 2. Configurar variables de entorno
-export DB_PASSWORD=tu_contraseña_segura
+cp .env.example .env
+# Editar .env: definir DB_PASSWORD y JWT_SECRET (openssl rand -hex 32)
 
 # 3. Levantar todos los servicios
 docker-compose up -d
@@ -97,9 +98,9 @@ docker run -d --name travel-db \
 #### Backend
 
 ```bash
+# Usa el .env de la raíz del repo
+set -a && source ../.env && set +a
 cd back
-cp .env.example .env
-# Editar .env con tus credenciales
 go mod download
 go run cmd/api/main.go
 ```
@@ -108,27 +109,24 @@ go run cmd/api/main.go
 
 ```bash
 cd front
-cp .env.example .env.local
-# Editar .env.local
-pnpm install
-pnpm dev
+echo "NEXT_PUBLIC_API_URL=http://localhost:3001/api" > .env.local
+npm install
+npm run dev
 ```
-
-## Credenciales de Demo
-
-La base de datos incluye un usuario de demostración:
-
-- **Email**: demo@traveltracker.com
-- **Contraseña**: Demo123456!
 
 ## Endpoints de la API
 
 ### Autenticación
 
 - `POST /api/auth/register` - Registrar usuario
-- `POST /api/auth/login` - Iniciar sesión
-- `POST /api/auth/logout` - Cerrar sesión
-- `GET /api/auth/validate` - Validar sesión (protegido)
+- `POST /api/auth/login` - Iniciar sesión. Devuelve tokens, o `{ mfa_required, mfa_token }` si el usuario tiene MFA
+- `POST /api/auth/mfa/verify` - Completar el login con un código TOTP o de recuperación
+- `POST /api/auth/refresh` - Rotar el refresh token y obtener un access token nuevo
+- `POST /api/auth/logout` - Revocar el refresh token
+- `GET /api/auth/me` - Usuario actual (protegido)
+- `POST /api/auth/mfa/setup` - Generar secreto TOTP (protegido)
+- `POST /api/auth/mfa/enable` - Confirmar MFA con un código; devuelve códigos de recuperación (protegido)
+- `POST /api/auth/mfa/disable` - Desactivar MFA con contraseña + código (protegido)
 
 ### Trips (Requieren Autenticación)
 
@@ -147,37 +145,30 @@ La base de datos incluye un usuario de demostración:
 - `PUT /api/places/{id}` - Actualizar lugar
 - `DELETE /api/places/{id}` - Eliminar lugar
 
+### Fotos (Requieren Autenticación)
+
+- `GET /api/trips/{id}/photos` - Fotos de todos los lugares de un viaje
+- `GET /api/places/{id}/photos` - Fotos de un lugar
+- `POST /api/places/{id}/photos` - Agregar foto (`photo_url` como data URL base64 o URL https)
+- `DELETE /api/photos/{id}` - Eliminar foto
+
 ### Health Check
 
 - `GET /health` - Estado del servidor
 
 ## Variables de Entorno
 
-### Base de Datos
+Todas se definen en el `.env` de la raíz (ver `.env.example`):
 
-```env
-POSTGRES_USER=travel_user
-POSTGRES_PASSWORD=tu_contraseña
-POSTGRES_DB=travel_tracker
-```
-
-### Backend
-
-```env
-PORT=3001
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=travel_user
-DB_PASSWORD=tu_contraseña
-DB_NAME=travel_tracker
-DB_SSLMODE=disable
-```
-
-### Frontend
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001/api
-```
+| Variable | Descripción | Default |
+|---|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Conexión a PostgreSQL | `localhost`, `5432`, `travel_user`, —, `travel_tracker`, `disable` |
+| `PORT` | Puerto del API | `3001` |
+| `JWT_SECRET` | Secreto HS256 para firmar los JWT. **Obligatorio**, mínimo 32 caracteres | — |
+| `JWT_ACCESS_TTL` | Duración del access token | `15m` |
+| `JWT_REFRESH_TTL` | Duración del refresh token | `720h` |
+| `CORS_ALLOWED_ORIGINS` | Orígenes permitidos, separados por coma | `http://localhost:3000` |
+| `NEXT_PUBLIC_API_URL` | URL del API para el frontend (se fija en el build) | `http://localhost:3001/api` |
 
 ## Tecnologías
 
@@ -193,23 +184,26 @@ NEXT_PUBLIC_API_URL=http://localhost:3001/api
 - Go 1.23
 - Gorilla Mux (router)
 - lib/pq (PostgreSQL driver)
+- golang-jwt (JWT HS256)
 - bcrypt (hashing)
+- TOTP (RFC 6238) implementado con la stdlib
 - CORS middleware
 
 ### Base de Datos
-- PostgreSQL 18 Alpine
+- PostgreSQL 17 Alpine
 - Row Level Security (RLS)
-- Funciones SQL personalizadas
 - Índices optimizados
 
 ## Seguridad
 
-- **Contraseñas**: Hasheadas con bcrypt (cost factor 10)
-- **Tokens**: Generados con crypto/rand (32 bytes)
-- **RLS**: Políticas a nivel de base de datos
-- **CORS**: Configurado en el backend
-- **Sesiones**: Expiran automáticamente
-- **Validación**: En cada request protegido
+- **Contraseñas**: bcrypt (cost 12), entre 8 y 72 caracteres
+- **Access token**: JWT HS256 de 15 minutos, validado en cada request protegido (issuer, audiencia, expiración y algoritmo)
+- **Refresh token**: aleatorio de 256 bits, guardado como hash SHA-256 y **rotado** en cada uso. Si se reutiliza un token ya rotado se revoca toda la sesión
+- **MFA**: TOTP de 6 dígitos (compatible con Google Authenticator, Authy, 1Password…), con protección contra reutilización del mismo código y 10 códigos de recuperación de un solo uso
+- **Rate limiting**: login (10 intentos por email / 50 por IP cada 15 min) y códigos MFA (5 intentos cada 15 min)
+- **Aislamiento de datos**: cada query filtra por `user_id` del token, además de las políticas RLS
+- **CORS**: solo los orígenes de `CORS_ALLOWED_ORIGINS`
+- **Validación**: rangos de coordenadas, ratings, gastos, fechas y tamaño de requests
 
 ## Desarrollo
 
@@ -226,9 +220,10 @@ make docker-build  # Build Docker
 
 # Frontend
 cd front
-pnpm dev          # Desarrollo
-pnpm build        # Build de producción
-pnpm start        # Ejecutar producción
+npm run dev       # Desarrollo
+npm run build     # Build de producción (incluye chequeo de tipos)
+npm run lint      # ESLint
+npm start         # Ejecutar producción
 
 # Docker Compose
 docker-compose up -d              # Levantar servicios
@@ -259,7 +254,8 @@ go test -cover ./...
 
 # Frontend
 cd front
-pnpm test  # Si hay tests configurados
+npm run lint
+npx tsc --noEmit
 ```
 
 ## Deployment
@@ -270,8 +266,8 @@ pnpm test  # Si hay tests configurados
 2. Usar HTTPS en el frontend
 3. Configurar orígenes CORS específicos
 4. Habilitar SSL en PostgreSQL
-5. Configurar backups de la base de datos
-6. Implementar rate limiting
+5. Conectar el API con un rol de PostgreSQL sin privilegios de superusuario (para que RLS aplique)
+6. Configurar backups de la base de datos
 7. Monitoreo y alertas
 
 ### Servicios Cloud
@@ -303,20 +299,23 @@ docker-compose restart db api
 2. Verificar que el API esté corriendo en el puerto 3001
 3. Revisar CORS en el backend
 
-### Error "function create_user does not exist"
+### Error "relation ... does not exist" o columnas faltantes
 
-Los scripts SQL no se ejecutaron. Reconstruir la base de datos:
+Los scripts SQL solo se ejecutan cuando el volumen de datos está vacío. Si cambió el esquema, reconstruir la base de datos (borra los datos):
 
 ```bash
 docker-compose down -v
-docker-compose up -d db
+docker-compose up -d
 ```
 
 ## Roadmap
 
-- [ ] Implementar JWT
-- [ ] Agregar refresh token rotation
-- [ ] Upload de fotos para lugares
+- [x] Implementar JWT
+- [x] Agregar refresh token rotation
+- [x] Verificación en dos pasos (TOTP)
+- [x] API de fotos para lugares
+- [ ] Montar el álbum de fotos en una página de viaje
+- [ ] Guardar fotos en un object storage en lugar de la base de datos
 - [ ] Exportar viajes a PDF
 - [ ] Compartir viajes públicamente
 - [ ] Estadísticas y gráficos
