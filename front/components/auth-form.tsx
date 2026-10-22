@@ -64,18 +64,18 @@ export function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-teal-50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md rounded-3xl border-0 shadow-sm">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-2">
-            {mfaToken ? <ShieldCheck className="w-6 h-6 text-white" /> : <MapPin className="w-6 h-6 text-white" />}
+          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-[14px] bg-primary text-primary-foreground">
+            {mfaToken ? <ShieldCheck className="size-6" aria-hidden /> : <MapPin className="size-6" aria-hidden />}
           </div>
-          <CardTitle className="text-2xl">{mfaToken ? "Verificación en dos pasos" : "Travel Tracker"}</CardTitle>
+          <CardTitle className="font-display text-2xl font-bold">{mfaToken ? "Verificación en dos pasos" : "Travel Tracker"}</CardTitle>
           <CardDescription>
             {mfaToken
               ? "Ingresa el código de 6 dígitos de tu app autenticadora o un código de recuperación"
               : isLogin
-                ? "Inicia sesión para ver tus viajes"
+                ? "El diario de tus viajes: lugares, fotos y todo lo que viviste"
                 : "Crea tu cuenta para comenzar"}
           </CardDescription>
         </CardHeader>
@@ -97,9 +97,9 @@ export function AuthForm() {
                 />
               </div>
 
-              {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>}
+              {error && <div role="alert" className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="h-11 w-full rounded-xl font-bold" disabled={loading}>
                 {loading ? "Verificando..." : "Verificar"}
               </Button>
               <Button type="button" variant="ghost" className="w-full" onClick={backToLogin} disabled={loading}>
@@ -137,9 +137,9 @@ export function AuthForm() {
                   />
                 </div>
 
-                {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>}
+                {error && <div role="alert" className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
 
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="h-11 w-full rounded-xl font-bold" disabled={loading}>
                   {loading ? "Cargando..." : isLogin ? "Iniciar sesión" : "Crear cuenta"}
                 </Button>
               </form>
@@ -148,7 +148,7 @@ export function AuthForm() {
                 <button
                   type="button"
                   onClick={() => setIsLogin(!isLogin)}
-                  className="text-blue-600 hover:underline"
+                  className="font-bold text-primary hover:underline"
                   disabled={loading}
                 >
                   {isLogin ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}

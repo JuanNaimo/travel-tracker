@@ -1,186 +1,162 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import type { Place, Trip } from "@/lib/api-client"
+import type { Place } from "@/lib/api-client"
 import type { LeafletMouseEvent, Map as LeafletMap, Marker } from "leaflet"
+import { cn } from "@/lib/utils"
+
+type Coordinates = { latitude: number; longitude: number }
 
 interface TravelMapProps {
   places: Place[]
-  trips?: Trip[]
   center?: { lat: number; lng: number }
   zoom?: number
+  selectedPlaceId?: string | null
+  /** Color del marcador de cada lugar; por defecto el color principal. */
+  markerColor?: (place: Place) => string
   onPlaceClick?: (place: Place) => void
-  onMapClick?: (coordinates: { latitude: number; longitude: number }) => void
-  enableAddMode?: boolean
-  pendingLocation?: { latitude: number; longitude: number } | null
+  /** Con esta función, el clic derecho (o mantener apretado en el celular) elige un punto. */
+  onMapClick?: (coordinates: Coordinates) => void
+  /** Elegir el punto también con un clic común, como en un selector de ubicación. */
+  pickOnClick?: boolean
+  pendingLocation?: Coordinates | null
+  className?: string
 }
 
-const TRIP_COLORS = [
-  "#3B82F6", // blue-500
-  "#EF4444", // red-500
-  "#10B981", // green-500
-  "#F59E0B", // amber-500
-  "#8B5CF6", // purple-500
-  "#EC4899", // pink-500
-  "#14B8A6", // teal-500
-  "#F97316", // orange-500
-  "#6366F1", // indigo-500
-  "#84CC16", // lime-500
-  "#06B6D4", // cyan-500
-  "#34D399", // emerald-500
-  "#FACC15", // yellow-500
-  "#D946EF", // fuchsia-500
-  "#A855F7", // violet-500
-  "#0EA5E9", // sky-500
-  "#F43F5E", // rose-500
-  "#64748B", // slate-500
-  "#71717A", // zinc-500
-  "#B45309", // amber-700 (marrón cálido)
-]
+export const MARKER_COLORS = { visited: "#0B6E58", upcoming: "#B4561B" }
 
-const getTripColor = (tripId: string, trips: Trip[] = []): string => {
-  const index = trips.findIndex((trip) => trip.id === tripId)
-  return index >= 0 ? TRIP_COLORS[index % TRIP_COLORS.length] : "#3B82F6"
-}
+const PIN_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg>`
 
-// Los popups de Leaflet se arman con HTML: escapar los datos ingresados por el usuario
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
+function pinHtml(color: string, selected: boolean) {
+  const size = selected ? 44 : 34
+  const fill = selected ? color : "#ffffff"
+  const ink = selected ? "#ffffff" : color
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${fill};color:${ink};border:2px solid ${color};box-shadow:0 3px 10px rgba(18,32,27,.18)">${PIN_SVG}</div>`
 }
 
 export function TravelMap({
   places,
-  trips = [],
-  center = { lat: 20, lng: 0 },
+  center = { lat: 0, lng: -30 },
   zoom = 2,
+  selectedPlaceId = null,
+  markerColor = () => MARKER_COLORS.visited,
   onPlaceClick,
   onMapClick,
-  enableAddMode = false,
+  pickOnClick = false,
   pendingLocation = null,
+  className,
 }: TravelMapProps) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<LeafletMap | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<LeafletMap | null>(null)
   const leafletRef = useRef<typeof import("leaflet") | null>(null)
-  const markersRef = useRef<Marker[]>([])
+  const markersRef = useRef(new Map<string, Marker>())
   const pendingMarkerRef = useRef<Marker | null>(null)
-  const pendingLocationRef = useRef(pendingLocation)
-  const onMapClickRef = useRef(onMapClick)
+  const callbacksRef = useRef({ onPlaceClick, onMapClick, markerColor, pickOnClick })
+  const fittedRef = useRef(false)
 
   useEffect(() => {
-    pendingLocationRef.current = pendingLocation
-    onMapClickRef.current = onMapClick
+    callbacksRef.current = { onPlaceClick, onMapClick, markerColor, pickOnClick }
   })
 
-  const drawPendingMarker = () => {
-    const L = leafletRef.current
-    const map = mapInstanceRef.current
-    pendingMarkerRef.current?.remove()
-    pendingMarkerRef.current = null
-    const location = pendingLocationRef.current
-    if (!L || !map || !location) return
-
-    const icon = L.divIcon({
-      className: "custom-marker",
-      html: `<div class="w-8 h-8 bg-green-500 border-2 border-white rounded-full shadow-lg animate-pulse"></div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    })
-    pendingMarkerRef.current = L.marker([location.latitude, location.longitude], { icon }).addTo(map)
-  }
-
+  // El mapa se crea una sola vez; los marcadores se actualizan en los efectos de abajo
+  const initialView = useRef({ center, zoom })
+  const readyRef = useRef<Promise<void> | null>(null)
   useEffect(() => {
-    drawPendingMarker()
-  }, [pendingLocation?.latitude, pendingLocation?.longitude])
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !mapRef.current) return
-
-    const loadLeaflet = async () => {
-      const L = (await import("leaflet")).default
+    let cancelled = false
+    readyRef.current = import("leaflet").then(({ default: L }) => {
+      if (cancelled || !containerRef.current) return
       leafletRef.current = L
+      const { center, zoom } = initialView.current
+      const map = L.map(containerRef.current, { worldCopyJump: true, zoomControl: false }).setView([center.lat, center.lng], zoom)
+      // Abajo a la derecha, para no chocar con los filtros que van arriba del mapa
+      L.control.zoom({ position: "bottomright" }).addTo(map)
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map)
+      const pick = (e: LeafletMouseEvent) =>
+        callbacksRef.current.onMapClick?.({ latitude: e.latlng.lat, longitude: e.latlng.lng })
+      map.on("contextmenu", pick)
+      map.on("click", (e: LeafletMouseEvent) => {
+        if (callbacksRef.current.pickOnClick) pick(e)
+      })
+      mapRef.current = map
+    })
+    const markers = markersRef.current
+    return () => {
+      cancelled = true
+      mapRef.current?.remove()
+      mapRef.current = null
+      markers.clear()
+    }
+  }, [])
 
-      if (!mapRef.current) return
-
-      if (!mapInstanceRef.current) {
-        mapInstanceRef.current = L.map(mapRef.current).setView([center.lat, center.lng], zoom)
-
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-        }).addTo(mapInstanceRef.current)
-
-        if (enableAddMode) {
-          mapInstanceRef.current.on("contextmenu", (e: LeafletMouseEvent) => {
-            onMapClickRef.current?.({ latitude: e.latlng.lat, longitude: e.latlng.lng })
-          })
-        }
-      }
-
-      const map = mapInstanceRef.current
+  useEffect(() => {
+    let cancelled = false
+    readyRef.current?.then(() => {
+      const L = leafletRef.current
+      const map = mapRef.current
+      if (cancelled || !L || !map) return
 
       markersRef.current.forEach((marker) => marker.remove())
-      markersRef.current = []
-
-      if (places.length > 0) {
-        const bounds = L.latLngBounds([])
-
-        places.forEach((place) => {
-          const tripColor = getTripColor(place.trip_id, trips)
-
-          const customIcon = L.divIcon({
-            className: "custom-marker",
-            html: `<div class="w-6 h-6 border-2 border-white rounded-full shadow-lg" style="background-color: ${tripColor};"></div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
-          })
-
-          const marker = L.marker([place.latitude, place.longitude], { icon: customIcon }).addTo(map)
-
-          const popupContent = `
-            <div class="p-2 min-w-[200px]">
-              <div class="font-semibold text-base mb-1">${escapeHtml(place.name)}</div>
-              ${place.description ? `<p class="text-sm text-gray-600 mb-2">${escapeHtml(place.description)}</p>` : ""}
-              ${place.rating ? `<div class="flex gap-1 mb-2 text-yellow-500">${"★".repeat(place.rating)}${"☆".repeat(5 - place.rating)}</div>` : ""}
-              ${place.expenses > 0 ? `<p class="text-sm"><strong>Gastos:</strong> $${place.expenses}</p>` : ""}
-            </div>
-          `
-
-          marker.bindPopup(popupContent)
-
-          marker.on("click", () => {
-            map.flyTo([place.latitude, place.longitude], 12, {
-              duration: 1.5,
-            })
-
-            if (onPlaceClick) {
-              onPlaceClick(place)
-            }
-          })
-
-          markersRef.current.push(marker)
-          bounds.extend([place.latitude, place.longitude])
+      markersRef.current.clear()
+      for (const place of places) {
+        const selected = place.id === selectedPlaceId
+        const icon = L.divIcon({
+          className: "custom-marker",
+          html: pinHtml(callbacksRef.current.markerColor(place), selected),
+          iconSize: selected ? [44, 44] : [34, 34],
+          iconAnchor: selected ? [22, 22] : [17, 17],
         })
-
-        map.fitBounds(bounds, { padding: [50, 50] })
+        const marker = L.marker([place.latitude, place.longitude], {
+          icon,
+          title: place.name,
+          zIndexOffset: selected ? 1000 : 0,
+        }).addTo(map)
+        marker.on("click", () => callbacksRef.current.onPlaceClick?.(place))
+        markersRef.current.set(place.id, marker)
       }
 
-      drawPendingMarker()
-    }
-
-    loadLeaflet()
-
+      // Encuadrar todos los lugares la primera vez que hay datos
+      if (!fittedRef.current && places.length > 0) {
+        fittedRef.current = true
+        if (places.length === 1) map.setView([places[0].latitude, places[0].longitude], 12)
+        else map.fitBounds(L.latLngBounds(places.map((p) => [p.latitude, p.longitude])), { padding: [48, 48], maxZoom: 13 })
+      }
+    })
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove()
-        mapInstanceRef.current = null
-      }
+      cancelled = true
     }
-  }, [places, trips, enableAddMode])
+  }, [places, selectedPlaceId])
 
-  return <div ref={mapRef} className="w-full h-full rounded-lg" />
+  useEffect(() => {
+    if (!selectedPlaceId) return
+    readyRef.current?.then(() => {
+      const place = places.find((p) => p.id === selectedPlaceId)
+      const map = mapRef.current
+      if (place && map) map.flyTo([place.latitude, place.longitude], Math.max(map.getZoom(), 11), { duration: 1 })
+    })
+    // Solo al cambiar la selección, no cada vez que se recargan los lugares
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlaceId])
+
+  useEffect(() => {
+    readyRef.current?.then(() => {
+      const L = leafletRef.current
+      const map = mapRef.current
+      pendingMarkerRef.current?.remove()
+      pendingMarkerRef.current = null
+      if (!L || !map || !pendingLocation) return
+      const icon = L.divIcon({
+        className: "custom-marker",
+        html: pinHtml(MARKER_COLORS.upcoming, true),
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+      })
+      pendingMarkerRef.current = L.marker([pendingLocation.latitude, pendingLocation.longitude], { icon }).addTo(map)
+      map.setView([pendingLocation.latitude, pendingLocation.longitude], Math.max(map.getZoom(), 11))
+    })
+  }, [pendingLocation])
+
+  return <div ref={containerRef} className={cn("h-full w-full", className)} />
 }

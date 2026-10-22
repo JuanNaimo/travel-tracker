@@ -33,7 +33,13 @@ const errorText: Record<string, string> = {
   "Too many attempts, try again later": "Demasiados intentos. Prueba de nuevo más tarde.",
 }
 
-export function MfaSettingsDialog() {
+interface MfaSettingsDialogProps {
+  trigger?: React.ReactNode
+  /** Se llama cuando se activa o desactiva la verificación. */
+  onChanged?: () => void
+}
+
+export function MfaSettingsDialog({ trigger, onChanged }: MfaSettingsDialogProps = {}) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>({ kind: "loading" })
   const [code, setCode] = useState("")
@@ -86,6 +92,7 @@ export function MfaSettingsDialog() {
     reset()
     setStep({ kind: "recovery", codes: data.recovery_codes })
     toast.success("Verificación en dos pasos activada.")
+    onChanged?.()
   }
 
   const disable = async (e: React.FormEvent) => {
@@ -101,15 +108,18 @@ export function MfaSettingsDialog() {
     reset()
     setStep({ kind: "disabled" })
     toast.success("Verificación en dos pasos desactivada.")
+    onChanged?.()
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="ghost">
-          <ShieldCheck className="w-4 h-4 mr-2" />
-          Seguridad
-        </Button>
+        {trigger ?? (
+          <Button variant="ghost">
+            <ShieldCheck className="w-4 h-4 mr-2" />
+            Seguridad
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>

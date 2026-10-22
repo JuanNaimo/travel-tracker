@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, MapPin, Loader2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
-import { mapOsmCategory } from "@/lib/geocoding"
+import { mapOsmCategory, type PlaceCategory } from "@/lib/geocoding"
 
 interface SearchResult {
   place_id: number
@@ -19,7 +19,7 @@ interface SearchResult {
 }
 
 interface PlaceSearchProps {
-  onSelectPlace: (place: { name: string; latitude: number; longitude: number; category: string }) => void
+  onSelectPlace: (place: { name: string; latitude: number; longitude: number; category: PlaceCategory }) => void
 }
 
 export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
@@ -47,8 +47,10 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
+      // El buscador puede estar dentro de un formulario: Enter busca, no envía
+      e.preventDefault()
       searchPlaces()
     }
   }
@@ -72,15 +74,16 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar restaurantes, hoteles, atracciones..."
+            placeholder="Buscar un lugar, ciudad o dirección"
+            aria-label="Buscar un lugar"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             onFocus={() => results.length > 0 && setShowResults(true)}
             className="pl-9"
           />
         </div>
-        <Button type="button" onClick={searchPlaces} disabled={loading}>
+        <Button type="button" onClick={searchPlaces} disabled={loading} aria-label="Buscar">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
         </Button>
       </div>

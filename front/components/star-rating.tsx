@@ -26,6 +26,8 @@ export function StarRating({ rating, maxRating = 5, size = "md", interactive = f
           type="button"
           onClick={() => interactive && onChange?.(star)}
           disabled={!interactive}
+          aria-label={`${star} de ${maxRating} estrellas`}
+          aria-pressed={interactive ? star <= rating : undefined}
           className={cn(
             "transition-colors",
             interactive && "cursor-pointer hover:scale-110",
@@ -33,6 +35,7 @@ export function StarRating({ rating, maxRating = 5, size = "md", interactive = f
           )}
         >
           <Star
+            aria-hidden
             className={cn(
               sizeClasses[size],
               star <= rating ? "fill-yellow-400 text-yellow-400" : "fill-none text-gray-300",
