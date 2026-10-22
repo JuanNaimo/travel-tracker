@@ -4,6 +4,7 @@ export type User = {
   name?: string
   user_metadata?: Record<string, unknown>
   mfa_enabled: boolean
+  created_at?: string
 }
 
 export type Trip = {
@@ -40,16 +41,6 @@ export type PlacePhoto = {
   photo_url: string
   caption: string | null
   created_at: string
-}
-
-export type PlacePhotoGroup = {
-  place: Place
-  photos: PlacePhoto[]
-}
-
-export type PhotoMapTarget = {
-  place: Place
-  photo: PlacePhoto
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
@@ -421,6 +412,14 @@ export const db = {
   },
 
   photos: {
+    async getAll() {
+      try {
+        const data = await apiRequest<PlacePhoto[]>('/photos')
+        return { data, error: null }
+      } catch (error) {
+        return { data: [] as PlacePhoto[], error: errorMessage(error, 'Failed to fetch photos') }
+      }
+    },
     async getByTripId(tripId: string) {
       try {
         const data = await apiRequest<PlacePhoto[]>(`/trips/${tripId}/photos`)

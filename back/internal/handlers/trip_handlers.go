@@ -10,7 +10,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const tripColumns = `id, user_id, name, description, start_date, end_date, rating, created_at, updated_at`
+// Las fechas salen como YYYY-MM-DD: escaneadas a string, lib/pq las devuelve con hora y zona
+const tripColumns = `id, user_id, name, description,
+	to_char(start_date, 'YYYY-MM-DD'), to_char(end_date, 'YYYY-MM-DD'), rating, created_at, updated_at`
 
 type rowScanner interface {
 	Scan(dest ...interface{}) error

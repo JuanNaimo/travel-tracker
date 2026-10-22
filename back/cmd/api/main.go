@@ -111,6 +111,7 @@ func newRouter() *mux.Router {
 	apiAuth.HandleFunc("/places/"+uuidPattern, handlers.DeletePlace).Methods("DELETE")
 	apiAuth.HandleFunc("/places/"+uuidPattern+"/photos", handlers.GetPlacePhotos).Methods("GET")
 
+	apiAuth.HandleFunc("/photos", handlers.GetAllPhotos).Methods("GET")
 	apiAuth.HandleFunc("/photos/"+uuidPattern, handlers.DeletePhoto).Methods("DELETE")
 
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

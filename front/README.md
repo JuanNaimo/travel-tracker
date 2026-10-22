@@ -11,9 +11,29 @@ Se conecta al API en Go (`../back`) mediante [lib/api-client.ts](lib/api-client.
   refresh token y reintenta una vez (un solo refresh en curso aunque haya varias requests).
 - **MFA**: si el usuario tiene la verificación en dos pasos activa, `auth-form` pide el
   código de 6 dígitos (o un código de recuperación) después de la contraseña.
-- **Configuración de MFA**: botón **Seguridad** en el dashboard
+- **Configuración de MFA**: en **Perfil › Verificación en dos pasos**
   ([components/mfa-settings-dialog.tsx](components/mfa-settings-dialog.tsx)): muestra el QR,
   confirma el código y entrega los códigos de recuperación.
+
+## Páginas
+
+La app es la misma en el celular y en la compu: en pantallas chicas la navegación es una barra
+inferior con un botón central de **Nueva entrada**; desde 1024 px pasa a un menú lateral.
+
+| Ruta | Qué muestra |
+|---|---|
+| `/dashboard` | Inicio: viaje en curso con su progreso, totales, viajes, próximo viaje y fotos recientes |
+| `/dashboard/trips` | Mis viajes, con búsqueda y filtros por estado y año |
+| `/dashboard/trips/[id]` | Detalle del viaje: diario día por día, fotos y lugares en el mapa |
+| `/dashboard/entries/new` | Nueva entrada del diario (`?viaje=`, `?lat=&lng=` la precargan) |
+| `/dashboard/entries/[id]/edit` | Editar o eliminar una entrada y sus fotos |
+| `/dashboard/map` | Todos los lugares; clic derecho (o mantener apretado) agrega una entrada ahí |
+| `/dashboard/photos` | Todas las fotos agrupadas por viaje |
+| `/dashboard/profile` | Totales, tema claro/oscuro, MFA, exportar datos y cerrar sesión |
+
+Cada **entrada del diario es un lugar** (`places` en el API): el título es el nombre del lugar,
+"¿Cómo estuvo?" es la calificación (5 = Increíble … 1 = Difícil) y el tipo de lugar es la
+categoría. Las fotos grandes se achican en el navegador a 2000 px antes de subirse.
 
 ## Configuración
 
@@ -133,6 +153,7 @@ const { data, error } = await db.places.getAll()
 const { data, error } = await db.places.getByTripId(tripId)
 
 // Fotos
+const { data, error } = await db.photos.getAll()
 const { data, error } = await db.photos.getByTripId(tripId)
 const { data, error } = await db.photos.create({ place_id, photo_url, caption })
 ```

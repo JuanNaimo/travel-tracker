@@ -17,12 +17,12 @@ func scanPhoto(row rowScanner, photo *models.PlacePhoto) error {
 	return row.Scan(&photo.ID, &photo.PlaceID, &photo.PhotoURL, &photo.Caption, &photo.CreatedAt)
 }
 
+// filter es la columna por la que se filtra con el {id} de la ruta; vacío trae todas las del usuario.
 func listPhotos(w http.ResponseWriter, r *http.Request, filter string) {
 	user, ok := requireUser(w, r)
 	if !ok {
 		return
 	}
-	id := mux.Vars(r)["id"]
 
 	tx, ok := beginUserTx(w, user.ID)
 	if !ok {
@@ -30,13 +30,17 @@ func listPhotos(w http.ResponseWriter, r *http.Request, filter string) {
 	}
 	defer tx.Rollback()
 
-	rows, err := tx.Query(`
-		SELECT `+photoColumns+`
+	query := `
+		SELECT ` + photoColumns + `
 		FROM place_photos pp
 		JOIN places p ON p.id = pp.place_id
-		WHERE p.user_id = $1 AND `+filter+` = $2
-		ORDER BY pp.created_at ASC
-	`, user.ID, id)
+		WHERE p.user_id = $1`
+	args := []interface{}{user.ID}
+	if filter != "" {
+		query += ` AND ` + filter + ` = $2`
+		args = append(args, mux.Vars(r)["id"])
+	}
+	rows, err := tx.Query(query+` ORDER BY pp.created_at ASC`, args...)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "Failed to fetch photos")
 		return
@@ -62,6 +66,10 @@ func listPhotos(w http.ResponseWriter, r *http.Request, filter string) {
 		return
 	}
 	respondJSON(w, http.StatusOK, photos)
+}
+
+func GetAllPhotos(w http.ResponseWriter, r *http.Request) {
+	listPhotos(w, r, "")
 }
 
 func GetTripPhotos(w http.ResponseWriter, r *http.Request) {

@@ -1,77 +1,52 @@
-"use client"
-
-import type { Trip } from "@/lib/api-client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { StarRating } from "@/components/star-rating"
-import { Calendar, MapPin, Pencil, Trash2 } from "lucide-react"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
 import Link from "next/link"
+import { ChevronRight } from "lucide-react"
+import type { PlacePhoto, Trip } from "@/lib/api-client"
+import { formatTripDates, plural, tripStatus, TRIP_STATUS_LABELS } from "@/lib/travel"
+import { PhotoThumb } from "@/components/photo-thumb"
 
 interface TripCardProps {
   trip: Trip
-  placesCount?: number
-  onEdit?: () => void
-  onDelete?: () => void
+  cover: PlacePhoto | null
+  placesCount: number
 }
 
-export function TripCard({ trip, placesCount = 0, onEdit, onDelete }: TripCardProps) {
-  const startDate = trip.start_date ? new Date(trip.start_date) : null
-  const endDate = trip.end_date ? new Date(trip.end_date) : null
+/** Fila con miniatura en el celular; tarjeta con portada desde `sm`. */
+export function TripCard({ trip, cover, placesCount }: TripCardProps) {
+  const status = tripStatus(trip)
+  const dates = formatTripDates(trip)
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-xl mb-2">{trip.name}</CardTitle>
-            {trip.description && (
-              <CardDescription className="line-clamp-2 text-balance">{trip.description}</CardDescription>
-            )}
-          </div>
-          <div className="flex gap-2 ml-4">
-            {onEdit && (
-              <Button variant="ghost" size="icon" onClick={onEdit}>
-                <Pencil className="w-4 h-4" />
-              </Button>
-            )}
-            {onDelete && (
-              <Button variant="ghost" size="icon" onClick={onDelete}>
-                <Trash2 className="w-4 h-4 text-red-600" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {trip.rating && (
-          <div className="flex items-center gap-2">
-            <StarRating rating={trip.rating} />
-          </div>
+    <Link
+      href={`/dashboard/trips/${trip.id}`}
+      className="group flex items-center gap-3.5 rounded-[18px] bg-card p-2.5 text-foreground transition-shadow hover:shadow-md sm:flex-col sm:items-stretch sm:gap-0 sm:overflow-hidden sm:p-0"
+    >
+      <div className="relative shrink-0">
+        <PhotoThumb
+          photo={cover}
+          alt={trip.name}
+          className="size-[84px] rounded-[14px] sm:h-[140px] sm:w-full sm:rounded-none"
+          sizes="(max-width: 640px) 84px, 33vw"
+        />
+        {(status === "ongoing" || status === "upcoming") && (
+          <span
+            className={
+              status === "ongoing"
+                ? "absolute top-2 left-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary-foreground uppercase"
+                : "absolute top-2 left-2 rounded-full bg-warm-soft px-2 py-0.5 text-[10px] font-bold tracking-wide text-warm-foreground uppercase"
+            }
+          >
+            {TRIP_STATUS_LABELS[status]}
+          </span>
         )}
-
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-          {startDate && endDate && (
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>
-                {format(startDate, "d MMM", { locale: es })} - {format(endDate, "d MMM yyyy", { locale: es })}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4" />
-            <span>{placesCount} lugares</span>
-          </div>
-        </div>
-
-        <Link href={`/dashboard/trips/${trip.id}`}>
-          <Button className="w-full bg-transparent" variant="outline">
-            Ver detalles
-          </Button>
-        </Link>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:px-4 sm:pt-3.5 sm:pb-4">
+        <span className="truncate font-display text-[17px] font-bold">{trip.name}</span>
+        {trip.description && <span className="line-clamp-1 text-[13px] text-muted-foreground">{trip.description}</span>}
+        <span className="text-xs text-muted-foreground">
+          {[dates, plural(placesCount, "entrada", "entradas")].filter(Boolean).join(" · ")}
+        </span>
+      </div>
+      <ChevronRight className="size-[18px] shrink-0 text-muted-foreground sm:hidden" aria-hidden />
+    </Link>
   )
 }
