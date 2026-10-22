@@ -44,6 +44,16 @@ export type PlacePhoto = {
   created_at: string
 }
 
+export type PlacePhotoGroup = {
+  place: Place
+  photos: PlacePhoto[]
+}
+
+export type PhotoMapTarget = {
+  place: Place
+  photo: PlacePhoto
+}
+
 // Configuración del API
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
@@ -332,6 +342,46 @@ export const db = {
         return { error: null }
       } catch (error) {
         const message = error instanceof ApiError ? error.message : 'Failed to delete place'
+        return { error: message }
+      }
+    },
+  },
+
+  photos: {
+    async getByTripId(tripId: string) {
+      try {
+        const data = await apiRequest<PlacePhoto[]>(`/trips/${tripId}/photos`)
+        return { data, error: null }
+      } catch (error) {
+        return { data: [] as PlacePhoto[], error: null }
+      }
+    },
+    async getByPlaceId(placeId: string) {
+      try {
+        const data = await apiRequest<PlacePhoto[]>(`/places/${placeId}/photos`)
+        return { data, error: null }
+      } catch (error) {
+        return { data: [] as PlacePhoto[], error: null }
+      }
+    },
+    async create(photo: { place_id: string; photo_url: string; caption?: string | null }) {
+      try {
+        const data = await apiRequest<PlacePhoto>(`/places/${photo.place_id}/photos`, {
+          method: 'POST',
+          body: JSON.stringify({ photo_url: photo.photo_url, caption: photo.caption }),
+        })
+        return { data, error: null }
+      } catch (error) {
+        const message = error instanceof ApiError ? error.message : 'Failed to create photo'
+        return { data: null, error: message }
+      }
+    },
+    async delete(id: string) {
+      try {
+        await apiRequest(`/photos/${id}`, { method: 'DELETE' })
+        return { error: null }
+      } catch (error) {
+        const message = error instanceof ApiError ? error.message : 'Failed to delete photo'
         return { error: message }
       }
     },

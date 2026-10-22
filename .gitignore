@@ -18,6 +18,10 @@ Thumbs.db
 *.swo
 *~
 
+#SDD
+.specify/
+specs
+
 # Logs
 *.log
 npm-debug.log*
