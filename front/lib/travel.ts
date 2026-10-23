@@ -154,3 +154,37 @@ export function sortTrips(trips: Trip[]): Trip[] {
 export function tripYear(trip: Trip): string | null {
   return trip.start_date ? trip.start_date.slice(0, 4) : null
 }
+
+/** Código de tres letras al estilo de los aeropuertos: "El Chaltén" → "CHA", "Patagonia" → "PAT". */
+export function placeCode(name: string): string {
+  const clean = name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z ]/g, " ")
+  const words = clean.split(/\s+/).filter(Boolean)
+  const significant = words.filter((w) => !["DE", "DEL", "LA", "LAS", "LOS", "EL", "Y", "EN"].includes(w))
+  const base = significant.length > 0 ? significant : words
+  if (base.length === 0) return "---"
+  if (base.length === 1) return base[0].slice(0, 3).padEnd(3, "X")
+  return (base[0][0] + base[1].slice(0, 2)).padEnd(3, "X")
+}
+
+/** Origen y destino del viaje para la tarjeta de embarque: primer y último lugar del diario. */
+export function tripRoute(trip: Trip, places: Place[]): { from: string; to: string; fromName: string; toName: string } {
+  const ordered = sortByVisit(places.filter((p) => p.trip_id === trip.id))
+  const first = ordered[0]
+  const last = ordered.at(-1)
+  if (!first || !last || first.id === last.id) {
+    return { from: first ? placeCode(first.name) : "---", to: placeCode(trip.name), fromName: first?.name ?? "Origen", toName: trip.name }
+  }
+  return { from: placeCode(first.name), to: placeCode(last.name), fromName: first.name, toName: last.name }
+}
+
+/** Estado del viaje en el idioma de un tablero de salidas. */
+export const BOARD_STATUS: Record<TripStatus, string> = {
+  upcoming: "Embarque",
+  ongoing: "En vuelo",
+  past: "Aterrizó",
+  undated: "Sin horario",
+}

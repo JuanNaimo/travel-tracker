@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { ShieldCheck, Loader2 } from "lucide-react"
+import { ShieldCheckIcon, SpinnerGapIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -116,7 +116,7 @@ export function MfaSettingsDialog({ trigger, onChanged }: MfaSettingsDialogProps
       <DialogTrigger asChild>
         {trigger ?? (
           <Button variant="ghost">
-            <ShieldCheck className="w-4 h-4 mr-2" />
+            <ShieldCheckIcon className="w-4 h-4 mr-2" />
             Seguridad
           </Button>
         )}
@@ -132,14 +132,14 @@ export function MfaSettingsDialog({ trigger, onChanged }: MfaSettingsDialogProps
 
         {step.kind === "loading" && (
           <div className="flex justify-center py-6">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <SpinnerGapIcon className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
         {step.kind === "disabled" && (
           <DialogFooter>
             <Button onClick={startSetup} disabled={busy}>
-              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {busy && <SpinnerGapIcon className="w-4 h-4 mr-2 animate-spin" />}
               Activar
             </Button>
           </DialogFooter>
@@ -170,7 +170,7 @@ export function MfaSettingsDialog({ trigger, onChanged }: MfaSettingsDialogProps
             </div>
             <DialogFooter>
               <Button type="submit" disabled={busy}>
-                {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {busy && <SpinnerGapIcon className="w-4 h-4 mr-2 animate-spin" />}
                 Confirmar
               </Button>
             </DialogFooter>
@@ -229,7 +229,7 @@ export function MfaSettingsDialog({ trigger, onChanged }: MfaSettingsDialogProps
             </div>
             <DialogFooter>
               <Button type="submit" variant="destructive" disabled={busy}>
-                {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {busy && <SpinnerGapIcon className="w-4 h-4 mr-2 animate-spin" />}
                 Desactivar
               </Button>
             </DialogFooter>

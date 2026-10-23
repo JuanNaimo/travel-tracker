@@ -219,6 +219,7 @@ Todas se definen en el `.env` de la raíz (ver `.env.example`):
 - Tailwind CSS 4
 - Radix UI (shadcn/ui)
 - Leaflet (mapas)
+- Phosphor Icons (íconos) y Motion (animaciones)
 
 ### Backend
 - Go 1.23

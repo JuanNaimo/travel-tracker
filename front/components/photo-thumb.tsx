@@ -1,5 +1,5 @@
 import Image from "next/image"
-import { ImageIcon } from "lucide-react"
+import { ImageIcon } from "@phosphor-icons/react/ssr"
 import type { PlacePhoto } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 
@@ -19,7 +19,7 @@ export function PhotoThumb({ photo, alt, className, sizes = "(max-width: 768px) 
       {photo ? (
         <Image src={photo.photo_url} alt={photo.caption ?? alt} fill sizes={sizes} className="object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex h-full w-full items-center justify-center gap-1.5 font-mono text-[11px] text-muted-foreground uppercase">
           <ImageIcon className="size-[18px]" aria-hidden />
           {emptyLabel}
         </div>

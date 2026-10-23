@@ -1,5 +1,7 @@
 "use client"
 
+import { m } from "motion/react"
+import { useId } from "react"
 import { cn } from "@/lib/utils"
 
 interface FilterChipsProps<T extends string> {
@@ -7,14 +9,14 @@ interface FilterChipsProps<T extends string> {
   value: T
   onChange: (value: T) => void
   label: string
-  /** "solid" usa el color principal; "ink" el color del texto, para chips sobre el mapa. */
-  tone?: "solid" | "ink"
   className?: string
 }
 
-export function FilterChips<T extends string>({ options, value, onChange, label, tone = "solid", className }: FilterChipsProps<T>) {
+/** Filtros como teclas de tablero; el resaltado se desliza hasta la opción elegida. */
+export function FilterChips<T extends string>({ options, value, onChange, label, className }: FilterChipsProps<T>) {
+  const group = useId()
   return (
-    <div role="group" aria-label={label} className={cn("flex flex-wrap gap-2", className)}>
+    <div role="group" aria-label={label} className={cn("flex flex-wrap gap-1.5", className)}>
       {options.map((option) => {
         const active = option.value === value
         return (
@@ -24,15 +26,18 @@ export function FilterChips<T extends string>({ options, value, onChange, label,
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-9 rounded-full border px-4 text-[13px] font-bold transition-colors",
-              active
-                ? tone === "solid"
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-foreground bg-foreground text-background"
-                : "border-border bg-card text-foreground hover:bg-muted",
+              "relative h-9 rounded-md border px-3.5 font-mono text-[11px] font-semibold tracking-wider uppercase transition-colors",
+              active ? "border-transparent text-signal-foreground" : "bg-card text-foreground hover:bg-muted",
             )}
           >
-            {option.label}
+            {active && (
+              <m.span
+                layoutId={`chip-${group}`}
+                className="absolute inset-0 rounded-md bg-signal"
+                transition={{ type: "spring", stiffness: 500, damping: 38 }}
+              />
+            )}
+            <span className="relative">{option.label}</span>
           </button>
         )
       })}

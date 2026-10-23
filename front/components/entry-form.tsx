@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { format } from "date-fns"
-import { Camera, LocateFixed, Loader2, MapPin, Trash2, X } from "lucide-react"
+import { CameraPlusIcon, CrosshairIcon, MapPinIcon, SpinnerGapIcon, TrashIcon, XIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { db, type Place, type PlacePhoto } from "@/lib/api-client"
 import { reverseGeocode } from "@/lib/geocoding"
@@ -221,7 +221,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
   if (trips.length === 0) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-        <h1 className="font-display text-2xl font-bold">Primero creá un viaje</h1>
+        <h1 className="title-board text-4xl">Primero creá un viaje</h1>
         <p className="max-w-sm text-sm text-muted-foreground">Cada entrada del diario pertenece a un viaje.</p>
         <div className="flex gap-2">
           <Button asChild variant="outline">
@@ -243,7 +243,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
               aria-label="Cerrar"
               className="flex size-11 items-center justify-center rounded-full text-foreground hover:bg-muted lg:border"
             >
-              <X className="size-5" aria-hidden />
+              <XIcon className="size-5" aria-hidden />
             </Link>
             <div className="flex flex-col">
               {trip && (
@@ -252,13 +252,13 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                   {day && day > 0 ? ` · Día ${day}` : ""}
                 </span>
               )}
-              <h1 className="font-display text-[17px] font-bold lg:text-[22px]">{title}</h1>
+              <h1 className="title-board text-[26px] lg:text-[32px]">{title}</h1>
             </div>
           </div>
           <div className="hidden items-center gap-2.5 lg:flex">
             {place && <DeleteEntryButton onConfirm={handleDelete} />}
             <Button type="submit" className="h-11 rounded-xl px-5 font-bold" disabled={submitting}>
-              {submitting && <Loader2 className="animate-spin" aria-hidden />}
+              {submitting && <SpinnerGapIcon className="animate-spin" aria-hidden />}
               {place ? "Guardar cambios" : "Guardar entrada"}
             </Button>
           </div>
@@ -279,7 +279,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                         form.setValue("trip_id", created.id)
                       }}
                       trigger={
-                        <button type="button" className="text-[13px] font-bold text-primary">
+                        <button type="button" className="label-mono font-semibold text-signal-text">
                           + Nuevo viaje
                         </button>
                       }
@@ -287,7 +287,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                   </div>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
-                      <SelectTrigger className="h-12 w-full rounded-[14px] bg-card">
+                      <SelectTrigger className="h-12 w-full rounded-xl bg-card">
                         <SelectValue placeholder="Elegí un viaje" />
                       </SelectTrigger>
                     </FormControl>
@@ -306,7 +306,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
 
             <div className="flex flex-col gap-2.5">
               <div className="flex items-baseline justify-between">
-                <h2 className="text-sm font-bold">Fotos</h2>
+                <h2 className="label-mono font-semibold">Fotos</h2>
                 <span className="text-xs text-muted-foreground">
                   {photoCount} de {MAX_PHOTOS}
                 </span>
@@ -323,14 +323,14 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 <label
                   htmlFor="entry-photos"
-                  className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[14px] border-2 border-dashed border-primary bg-accent text-xs font-bold text-primary"
+                  className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-signal-text bg-accent font-mono text-[11px] font-semibold tracking-wider text-signal-text uppercase"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault()
                     addFiles(e.dataTransfer.files)
                   }}
                 >
-                  <Camera className="size-6" aria-hidden />
+                  <CameraPlusIcon className="size-7" aria-hidden />
                   Agregar
                 </label>
                 {keptPhotos.map((photo, i) => (
@@ -357,7 +357,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
             </div>
 
             <div className="flex flex-col gap-2.5">
-              <span className="text-sm font-bold">¿Dónde fue?</span>
+              <span className="label-mono font-semibold">¿Dónde fue?</span>
               <PlaceSearch
                 onSelectPlace={(p) => {
                   setLocation({ latitude: p.latitude, longitude: p.longitude }, p.name)
@@ -365,7 +365,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                   if (form.getValues("category") === "otros") form.setValue("category", p.category)
                 }}
               />
-              <div className="relative h-[220px] overflow-hidden rounded-[14px] border lg:h-[260px]">
+              <div className="relative h-[220px] overflow-hidden rounded-xl border lg:h-[260px]">
                 <TravelMap
                   places={[]}
                   center={location ? { lat: location.latitude, lng: location.longitude } : undefined}
@@ -377,13 +377,13 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5">
-                  <MapPin className="size-3.5" aria-hidden />
+                  <MapPinIcon className="size-3.5" aria-hidden />
                   {location
                     ? `${locationLabel ? `${locationLabel} · ` : ""}${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
                     : "Buscá el lugar o tocá el mapa para marcarlo."}
                 </span>
                 <Button type="button" variant="outline" size="sm" className="rounded-lg" onClick={locateMe} disabled={locating}>
-                  {locating ? <Loader2 className="animate-spin" aria-hidden /> : <LocateFixed aria-hidden />}
+                  {locating ? <SpinnerGapIcon className="animate-spin" aria-hidden /> : <CrosshairIcon aria-hidden />}
                   Usar mi ubicación
                 </Button>
               </div>
@@ -401,7 +401,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                 <FormItem>
                   <FormLabel>Título</FormLabel>
                   <FormControl>
-                    <Input className="h-12 rounded-[14px] bg-card text-base" placeholder="ej: Laguna de los Tres" {...field} />
+                    <Input className="h-12 rounded-xl bg-card text-base" placeholder="ej: Laguna de los Tres" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -416,7 +416,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                   <FormItem>
                     <FormLabel>Fecha</FormLabel>
                     <FormControl>
-                      <Input type="date" className="h-12 rounded-[14px] bg-card" {...field} />
+                      <Input type="date" className="h-12 rounded-xl bg-card" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -429,7 +429,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                   <FormItem>
                     <FormLabel>Gastos</FormLabel>
                     <FormControl>
-                      <Input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0" className="h-12 rounded-[14px] bg-card" {...field} />
+                      <Input type="number" inputMode="decimal" min="0" step="0.01" placeholder="0" className="h-12 rounded-xl bg-card" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -446,7 +446,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
                   <FormControl>
                     <Textarea
                       rows={6}
-                      className="rounded-[14px] bg-card text-[15px] leading-relaxed"
+                      className="rounded-xl bg-card text-[15px] leading-relaxed"
                       placeholder="Contá el día: qué hiciste, qué comiste, con quién te cruzaste…"
                       {...field}
                     />
@@ -498,7 +498,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
 
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background px-5 pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] lg:hidden">
           <Button type="submit" className="h-[52px] w-full rounded-2xl text-base font-bold" disabled={submitting}>
-            {submitting && <Loader2 className="animate-spin" aria-hidden />}
+            {submitting && <SpinnerGapIcon className="animate-spin" aria-hidden />}
             {place ? "Guardar cambios" : "Guardar entrada"}
           </Button>
         </div>
@@ -509,7 +509,7 @@ export function EntryForm({ place, defaultTripId, initialLocation }: EntryFormPr
 
 function PhotoTile({ src, cover, pending, onRemove }: { src: string; cover: boolean; pending?: boolean; onRemove: () => void }) {
   return (
-    <div className={cn("relative aspect-square overflow-hidden rounded-[14px] bg-muted", pending && "opacity-60")}>
+    <div className={cn("relative aspect-square overflow-hidden rounded-xl bg-muted", pending && "opacity-60")}>
       <Image src={src} alt="" fill sizes="160px" className="object-cover" />
       {cover && (
         <span className="absolute bottom-2 left-2 rounded-full bg-foreground px-2 py-0.5 text-[11px] font-bold text-background">Portada</span>
@@ -521,7 +521,7 @@ function PhotoTile({ src, cover, pending, onRemove }: { src: string; cover: bool
         disabled={pending}
         className="absolute top-1 right-1 flex size-7 items-center justify-center rounded-full bg-card text-foreground shadow"
       >
-        <X className="size-3.5" aria-hidden />
+        <XIcon className="size-3.5" aria-hidden />
       </button>
     </div>
   )
@@ -547,8 +547,8 @@ function PillGroup<T extends string | number>({
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
           className={cn(
-            "h-9 rounded-full border px-3.5 text-[13px] font-medium transition-colors",
-            option.value === value ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted",
+            "h-9 rounded-md border px-3 font-mono text-[11px] font-semibold tracking-wider uppercase transition-colors",
+            option.value === value ? "border-transparent bg-signal text-signal-foreground" : "bg-card hover:bg-muted",
           )}
         >
           {option.label}
@@ -567,7 +567,7 @@ function DeleteEntryButton({ onConfirm }: { onConfirm: () => Promise<void> }) {
       onConfirm={onConfirm}
     >
       <Button type="button" variant="outline" className="h-11 rounded-xl font-bold text-destructive hover:text-destructive">
-        <Trash2 aria-hidden />
+        <TrashIcon aria-hidden />
         Eliminar
       </Button>
     </ConfirmButton>
