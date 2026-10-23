@@ -1,13 +1,15 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Bricolage_Grotesque, DM_Sans } from "next/font/google"
+import { Anton, Inter_Tight, JetBrains_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/sonner"
 import { ThemeProvider } from "@/components/theme-provider"
+import { UiProviders } from "@/components/ui-providers"
 import "./globals.css"
 
-const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" })
-const bricolage = Bricolage_Grotesque({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-bricolage" })
+const interTight = Inter_Tight({ subsets: ["latin"], variable: "--font-inter-tight" })
+const anton = Anton({ subsets: ["latin"], weight: "400", variable: "--font-anton" })
+const jetbrains = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "600", "700"], variable: "--font-jetbrains" })
 
 export const metadata: Metadata = {
   title: "Travel Tracker - Organiza tus viajes",
@@ -39,10 +41,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={`${dmSans.variable} ${bricolage.variable} font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          {children}
-          <Toaster richColors position="top-center" />
+      <body className={`${interTight.variable} ${anton.variable} ${jetbrains.variable} font-sans antialiased`}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+          <UiProviders>
+            {children}
+            <Toaster richColors position="top-center" />
+          </UiProviders>
         </ThemeProvider>
         <Analytics />
       </body>

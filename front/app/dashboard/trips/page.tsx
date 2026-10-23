@@ -1,15 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search } from "lucide-react"
+import { MagnifyingGlassIcon, PlusIcon } from "@phosphor-icons/react"
 import { useTravelData } from "@/components/travel-data-provider"
 import { PageContainer } from "@/components/app-shell"
-import { TripCard } from "@/components/trip-card"
+import { DepartureBoard } from "@/components/departure-board"
 import { FilterChips } from "@/components/filter-chips"
+import { SplitFlap } from "@/components/split-flap"
 import { TripFormDialog } from "@/components/trip-form-dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { sortTrips, tripCover, tripStatus, tripYear } from "@/lib/travel"
+import { plural, sortTrips, tripStatus, tripYear } from "@/lib/travel"
 
 export default function TripsPage() {
   const { trips, places, photos, loading, reload } = useTravelData()
@@ -20,7 +21,7 @@ export default function TripsPage() {
   const years = [...new Set(trips.map(tripYear).filter((y): y is string => !!y))].sort().reverse()
   const filters = [
     { value: "all", label: "Todos" },
-    ...(trips.some((t) => tripStatus(t) !== "past") ? [{ value: "pending", label: "En curso y próximos" }] : []),
+    ...(trips.some((t) => tripStatus(t) !== "past") ? [{ value: "pending", label: "Por volar" }] : []),
     ...years.slice(0, 4).map((y) => ({ value: y, label: y })),
   ]
 
@@ -34,55 +35,51 @@ export default function TripsPage() {
   })
 
   return (
-    <PageContainer className="flex flex-col gap-4 lg:gap-5">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="font-display text-[28px] font-bold tracking-tight lg:text-[34px]">Mis viajes</h1>
+    <PageContainer className="flex flex-col gap-5">
+      <header className="flex items-end justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <span className="label-mono text-muted-foreground">{plural(trips.length, "viaje", "viajes")} registrados</span>
+          <h1 className="title-board text-[54px] lg:text-[72px]">
+            <SplitFlap text="MIS VIAJES" />
+          </h1>
+        </div>
         <TripFormDialog
           onSaved={reload}
           trigger={
             <Button className="h-11 rounded-xl font-bold max-sm:size-11 max-sm:p-0" aria-label="Nuevo viaje">
-              <Plus aria-hidden className="size-5" />
+              <PlusIcon aria-hidden className="size-5" />
               <span className="max-sm:hidden">Nuevo viaje</span>
             </Button>
           }
         />
       </header>
 
-      <label className="flex h-[46px] items-center gap-2.5 rounded-[14px] border bg-card px-3.5 text-muted-foreground lg:max-w-md">
-        <Search className="size-[18px]" aria-hidden />
+      <label className="flex h-12 items-center gap-2.5 rounded-xl border bg-card px-3.5 text-muted-foreground focus-within:border-ring lg:max-w-md">
+        <MagnifyingGlassIcon className="size-[18px]" aria-hidden />
         <span className="sr-only">Buscar viajes</span>
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por viaje o lugar"
-          className="min-w-0 flex-1 bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
+          placeholder="Buscar destino o lugar"
+          className="min-w-0 flex-1 bg-transparent font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
       </label>
 
       {filters.length > 1 && <FilterChips label="Filtrar viajes" options={filters} value={filter} onChange={setFilter} />}
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+        <div className="flex flex-col gap-2">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[104px] rounded-[18px] sm:h-[220px]" />
+            <Skeleton key={i} className="h-16" />
           ))}
         </div>
       ) : shown.length === 0 ? (
-        <p className="rounded-[18px] bg-card p-8 text-center text-sm text-muted-foreground">
-          {trips.length === 0 ? "Todavía no tenés viajes. Creá el primero con el botón de arriba." : "No encontramos viajes con esa búsqueda."}
+        <p className="label-mono rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+          {trips.length === 0 ? "Todavía no hay viajes. Creá el primero con el botón de arriba." : "Ningún viaje coincide con la búsqueda"}
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))] sm:gap-3.5">
-          {shown.map((trip) => (
-            <TripCard
-              key={trip.id}
-              trip={trip}
-              cover={tripCover(trip.id, places, photos)}
-              placesCount={places.filter((p) => p.trip_id === trip.id).length}
-            />
-          ))}
-        </div>
+        <DepartureBoard trips={shown} places={places} photos={photos} withCovers />
       )}
     </PageContainer>
   )

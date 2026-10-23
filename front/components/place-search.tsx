@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, MapPin, Loader2 } from "lucide-react"
+import { MagnifyingGlassIcon, MapPinIcon, SpinnerGapIcon } from "@phosphor-icons/react"
 import { Card } from "@/components/ui/card"
 import { mapOsmCategory, type PlaceCategory } from "@/lib/geocoding"
 
@@ -72,7 +72,7 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
     <div className="relative space-y-2">
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar un lugar, ciudad o dirección"
             aria-label="Buscar un lugar"
@@ -84,7 +84,7 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
           />
         </div>
         <Button type="button" onClick={searchPlaces} disabled={loading} aria-label="Buscar">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          {loading ? <SpinnerGapIcon className="w-4 h-4 animate-spin" /> : <MagnifyingGlassIcon className="w-4 h-4" />}
         </Button>
       </div>
 
@@ -97,7 +97,7 @@ export function PlaceSearch({ onSelectPlace }: PlaceSearchProps) {
               className="w-full text-left p-3 hover:bg-accent rounded-md transition-colors flex items-start gap-2"
               onClick={() => handleSelectPlace(result)}
             >
-              <MapPin className="w-4 h-4 mt-1 text-muted-foreground flex-shrink-0" />
+              <MapPinIcon className="w-4 h-4 mt-1 text-muted-foreground flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm truncate">{result.display_name.split(",")[0]}</div>
                 <div className="text-xs text-muted-foreground truncate">{result.display_name}</div>

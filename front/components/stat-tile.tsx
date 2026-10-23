@@ -3,12 +3,12 @@ import { cn } from "@/lib/utils"
 export function StatTile({ value, label, className }: { value: string | number; label: string; className?: string }) {
   const text = typeof value === "number" ? value.toLocaleString("es-AR") : value
   return (
-    <div className={cn("flex min-w-0 flex-col gap-0.5 rounded-2xl bg-card px-4 py-3.5 lg:px-5 lg:py-4", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1 rounded-xl border bg-card px-3.5 py-3 lg:px-4 lg:py-3.5", className)}>
+      <span className="label-mono truncate text-[10px] text-muted-foreground">{label}</span>
       {/* Los montos largos achican la letra para entrar en tarjetas angostas */}
-      <span className={cn("truncate font-display font-bold", text.length > 6 ? "text-lg lg:text-2xl" : "text-2xl lg:text-[30px]")}>
+      <span className={cn("truncate font-mono font-bold tabular-nums", text.length > 6 ? "text-lg lg:text-xl" : "text-2xl lg:text-[28px]")}>
         {text}
       </span>
-      <span className="text-xs text-muted-foreground lg:text-[13px]">{label}</span>
     </div>
   )
 }

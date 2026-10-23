@@ -69,7 +69,7 @@ export function TripFormDialog({ trip, trigger, onSaved }: TripFormDialogProps) 
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display">{trip ? "Editar viaje" : "Nuevo viaje"}</DialogTitle>
+          <DialogTitle className="title-board text-3xl">{trip ? "Editar viaje" : "Nuevo viaje"}</DialogTitle>
           <DialogDescription>
             {trip ? "Cambiá los datos del viaje." : "Puede ser uno que estés planeando o uno que ya hiciste."}
           </DialogDescription>

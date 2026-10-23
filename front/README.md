@@ -15,6 +15,18 @@ Se conecta al API en Go (`../back`) mediante [lib/api-client.ts](lib/api-client.
   ([components/mfa-settings-dialog.tsx](components/mfa-settings-dialog.tsx)): muestra el QR,
   confirma el código y entrega los códigos de recuperación.
 
+## Estilo
+
+El diseño sigue la idea de una **tarjeta de embarque**: tema oscuro por defecto con amarillo de
+cartel de aeropuerto (`--signal`), títulos en Anton, datos en JetBrains Mono y texto en Inter Tight.
+El tema claro ("papel") usa la tinta como color principal y deja el amarillo para rellenos.
+
+- [components/boarding-pass.tsx](components/boarding-pass.tsx): el viaje como tarjeta de embarque.
+  Los códigos de tres letras (`placeCode` en `lib/travel.ts`) salen del primer y el último lugar.
+- [components/departure-board.tsx](components/departure-board.tsx): la lista de viajes como tablero de salidas.
+- [components/split-flap.tsx](components/split-flap.tsx): títulos que se acomodan letra por letra.
+- [components/ui-providers.tsx](components/ui-providers.tsx): grosor de íconos y configuración de Motion.
+
 ## Páginas
 
 La app es la misma en el celular y en la compu: en pantallas chicas la navegación es una barra
@@ -167,7 +179,8 @@ const { data, error } = await db.photos.create({ place_id, photo_url, caption })
 - **Radix UI** - Componentes accesibles
 - **Leaflet** - Mapas interactivos
 - **qrcode.react** - Código QR para configurar MFA
-- **Lucide React** - Iconos
+- **Phosphor Icons** - Íconos (trazo `bold` por defecto, `fill` para el estado activo). Reemplaza a Lucide
+- **Motion** - Animaciones (`motion/react` con `LazyMotion` y `m.*`; respeta "reducir movimiento")
 
 ## Características
 

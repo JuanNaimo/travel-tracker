@@ -23,15 +23,20 @@ interface TravelMapProps {
   className?: string
 }
 
-export const MARKER_COLORS = { visited: "#0B6E58", upcoming: "#B4561B" }
+/** Visitado: tinta con avión amarillo. Próximo: amarillo con tinta, como un cartel de embarque. */
+export const MARKER_COLORS = { visited: "#101113", upcoming: "#FFC72C" }
 
-const PIN_SVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg>`
+const INK = "#101113"
+const SIGNAL = "#FFC72C"
+
+// Ícono Airplane de Phosphor (relleno); el marcador es HTML de Leaflet, no un componente de React
+const PLANE_SVG = `<svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M240,136v32a8,8,0,0,1-8,8,7.61,7.61,0,0,1-1.57-.16L156,161v23.73l17.66,17.65A8,8,0,0,1,176,208v24a8,8,0,0,1-11,7.43l-37-14.81L91,239.43A8,8,0,0,1,80,232V208a8,8,0,0,1,2.34-5.66L100,184.69V161L25.57,175.84A7.61,7.61,0,0,1,24,176a8,8,0,0,1-8-8V136a8,8,0,0,1,4.42-7.16L100,89.06V44a28,28,0,0,1,56,0V89.06l79.58,39.78A8,8,0,0,1,240,136Z"/></svg>`
 
 function pinHtml(color: string, selected: boolean) {
-  const size = selected ? 44 : 34
-  const fill = selected ? color : "#ffffff"
-  const ink = selected ? "#ffffff" : color
-  return `<div style="width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${fill};color:${ink};border:2px solid ${color};box-shadow:0 3px 10px rgba(18,32,27,.18)">${PIN_SVG}</div>`
+  const size = selected ? 44 : 32
+  const ink = color === SIGNAL ? INK : SIGNAL
+  const ring = selected ? `box-shadow:0 0 0 4px ${SIGNAL}66,0 4px 12px rgba(0,0,0,.35);` : "box-shadow:0 3px 8px rgba(0,0,0,.3);"
+  return `<div style="width:${size}px;height:${size}px;border-radius:10px;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;background:${color};color:${ink};border:2px solid ${INK};${ring}"><span style="transform:rotate(-45deg);display:flex">${PLANE_SVG}</span></div>`
 }
 
 export function TravelMap({

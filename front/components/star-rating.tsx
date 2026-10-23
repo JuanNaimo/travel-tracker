@@ -1,6 +1,6 @@
 "use client"
 
-import { Star } from "lucide-react"
+import { StarIcon } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 
 interface StarRatingProps {
@@ -34,12 +34,10 @@ export function StarRating({ rating, maxRating = 5, size = "md", interactive = f
             !interactive && "cursor-default",
           )}
         >
-          <Star
+          <StarIcon
             aria-hidden
-            className={cn(
-              sizeClasses[size],
-              star <= rating ? "fill-yellow-400 text-yellow-400" : "fill-none text-gray-300",
-            )}
+            weight={star <= rating ? "fill" : "bold"}
+            className={cn(sizeClasses[size], star <= rating ? "text-signal-text" : "text-muted-foreground/50")}
           />
         </button>
       ))}

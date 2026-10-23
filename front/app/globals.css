@@ -4,89 +4,102 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f3f5f2;
-  --foreground: #12201b;
-  --card: #ffffff;
-  --card-foreground: #12201b;
-  --popover: #ffffff;
-  --popover-foreground: #12201b;
-  --primary: #0b6e58;
-  --primary-foreground: #ffffff;
-  --secondary: #e4eae6;
-  --secondary-foreground: #12201b;
-  --muted: #e4eae6;
-  --muted-foreground: #5b6b64;
-  --accent: #e6f1ec;
-  --accent-foreground: #0b5444;
-  --warm: #b4561b;
-  --warm-soft: #fce9da;
-  --warm-foreground: #8a3f12;
-  --destructive: #a1281c;
-  --destructive-foreground: #a1281c;
-  --border: #dde3df;
-  --input: #dde3df;
-  --ring: #0b6e58;
-  --chart-1: #0b6e58;
-  --chart-2: #b4561b;
-  --chart-3: #34485c;
-  --chart-4: #6a4523;
-  --chart-5: #5a3a4c;
-  --radius: 0.875rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #2c3a35;
-  --sidebar-primary: #0b6e58;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e6f1ec;
-  --sidebar-accent-foreground: #0b5444;
-  --sidebar-border: #dde3df;
-  --sidebar-ring: #0b6e58;
+  /* Tema claro "papel": la tinta pasa a ser el color principal y el amarillo queda para rellenos */
+  --background: #efebe1;
+  --foreground: #101113;
+  --card: #fbf9f4;
+  --card-foreground: #101113;
+  --popover: #fbf9f4;
+  --popover-foreground: #101113;
+  --primary: #101113;
+  --primary-foreground: #ffc72c;
+  --secondary: #e3ded2;
+  --secondary-foreground: #101113;
+  --muted: #e3ded2;
+  --muted-foreground: #55585f;
+  --accent: #e6dfcc;
+  --accent-foreground: #101113;
+  --signal: #ffc72c;
+  --signal-foreground: #101113;
+  --signal-text: #765600;
+  --ticket: #f5f2ea;
+  --ticket-foreground: #101113;
+  --ticket-muted: #55585f;
+  --perforation: #c9c4b6;
+  --destructive: #b42318;
+  --destructive-foreground: #b42318;
+  --border: #d6d0c2;
+  --input: #d6d0c2;
+  --ring: #101113;
+  --chart-1: #101113;
+  --chart-2: #ffc72c;
+  --chart-3: #55585f;
+  --chart-4: #765600;
+  --chart-5: #b42318;
+  --radius: 0.75rem;
+  --sidebar: #fbf9f4;
+  --sidebar-foreground: #101113;
+  --sidebar-primary: #101113;
+  --sidebar-primary-foreground: #ffc72c;
+  --sidebar-accent: #101113;
+  --sidebar-accent-foreground: #ffc72c;
+  --sidebar-border: #d6d0c2;
+  --sidebar-ring: #101113;
 }
 
 .dark {
-  --background: #0f1714;
-  --foreground: #e8efeb;
-  --card: #17221e;
-  --card-foreground: #e8efeb;
-  --popover: #17221e;
-  --popover-foreground: #e8efeb;
-  --primary: #4cc29f;
-  --primary-foreground: #06261e;
-  --secondary: #22302b;
-  --secondary-foreground: #e8efeb;
-  --muted: #22302b;
-  --muted-foreground: #9aaca4;
-  --accent: #163a30;
-  --accent-foreground: #9fe0c8;
-  --warm: #f0915a;
-  --warm-soft: #3a2416;
-  --warm-foreground: #f6b88f;
-  --destructive: #f07a6c;
-  --destructive-foreground: #f07a6c;
-  --border: #2a3833;
-  --input: #2a3833;
-  --ring: #4cc29f;
-  --chart-1: #4cc29f;
-  --chart-2: #f0915a;
-  --chart-3: #8fb3d9;
-  --chart-4: #e3c49e;
-  --chart-5: #d9a9c4;
-  --sidebar: #17221e;
-  --sidebar-foreground: #c9d6d0;
-  --sidebar-primary: #4cc29f;
-  --sidebar-primary-foreground: #06261e;
-  --sidebar-accent: #163a30;
-  --sidebar-accent-foreground: #9fe0c8;
-  --sidebar-border: #2a3833;
-  --sidebar-ring: #4cc29f;
+  --background: #101113;
+  --foreground: #f5f5f0;
+  --card: #1c1d21;
+  --card-foreground: #f5f5f0;
+  --popover: #1c1d21;
+  --popover-foreground: #f5f5f0;
+  --primary: #ffc72c;
+  --primary-foreground: #101113;
+  --secondary: #26282d;
+  --secondary-foreground: #f5f5f0;
+  --muted: #26282d;
+  --muted-foreground: #a3a6ad;
+  --accent: #2a2614;
+  --accent-foreground: #ffd866;
+  --signal: #ffc72c;
+  --signal-foreground: #101113;
+  --signal-text: #ffc72c;
+  --ticket: #f5f2ea;
+  --ticket-foreground: #101113;
+  --ticket-muted: #55585f;
+  --perforation: #c9c4b6;
+  --destructive: #ff6b57;
+  --destructive-foreground: #ff6b57;
+  --border: #2b2d31;
+  --input: #34363c;
+  --ring: #ffc72c;
+  --chart-1: #ffc72c;
+  --chart-2: #f5f5f0;
+  --chart-3: #a3a6ad;
+  --chart-4: #ffd866;
+  --chart-5: #ff6b57;
+  --sidebar: #16171a;
+  --sidebar-foreground: #c9cbd0;
+  --sidebar-primary: #ffc72c;
+  --sidebar-primary-foreground: #101113;
+  --sidebar-accent: #ffc72c;
+  --sidebar-accent-foreground: #101113;
+  --sidebar-border: #2b2d31;
+  --sidebar-ring: #ffc72c;
 }
 
 @theme inline {
-  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), var(--font-dm-sans), ui-sans-serif, sans-serif;
-  --font-mono: ui-monospace, monospace;
-  --color-warm: var(--warm);
-  --color-warm-soft: var(--warm-soft);
-  --color-warm-foreground: var(--warm-foreground);
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-anton), Impact, "Arial Narrow", sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+  --color-signal-text: var(--signal-text);
+  --color-ticket: var(--ticket);
+  --color-ticket-foreground: var(--ticket-foreground);
+  --color-ticket-muted: var(--ticket-muted);
+  --color-perforation: var(--perforation);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -132,6 +145,22 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Rótulo de tablero: mono, mayúsculas y espaciado */
+@utility label-mono {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Títulos de cartel de aeropuerto */
+@utility title-board {
+  font-family: var(--font-anton), Impact, "Arial Narrow", sans-serif;
+  text-transform: uppercase;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
 }
 
 @layer components {

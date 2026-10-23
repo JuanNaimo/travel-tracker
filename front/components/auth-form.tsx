@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { auth } from "@/lib/api-client"
-import { MapPin, ShieldCheck } from "lucide-react"
+import { AirplaneTiltIcon, ShieldCheckIcon } from "@phosphor-icons/react"
 
 export function AuthForm() {
   const [isLogin, setIsLogin] = useState(true)
@@ -65,12 +65,12 @@ export function AuthForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md rounded-3xl border-0 shadow-sm">
+      <Card className="w-full max-w-md rounded-2xl border bg-card shadow-none">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-[14px] bg-primary text-primary-foreground">
-            {mfaToken ? <ShieldCheck className="size-6" aria-hidden /> : <MapPin className="size-6" aria-hidden />}
+          <div className="mx-auto mb-2 flex size-14 items-center justify-center rounded-xl bg-signal text-signal-foreground">
+            {mfaToken ? <ShieldCheckIcon className="size-7" weight="fill" aria-hidden /> : <AirplaneTiltIcon className="size-7" weight="fill" aria-hidden />}
           </div>
-          <CardTitle className="font-display text-2xl font-bold">{mfaToken ? "Verificación en dos pasos" : "Travel Tracker"}</CardTitle>
+          <CardTitle className="title-board text-[44px]">{mfaToken ? "Verificación en dos pasos" : "Travel Tracker"}</CardTitle>
           <CardDescription>
             {mfaToken
               ? "Ingresa el código de 6 dígitos de tu app autenticadora o un código de recuperación"
@@ -148,7 +148,7 @@ export function AuthForm() {
                 <button
                   type="button"
                   onClick={() => setIsLogin(!isLogin)}
-                  className="font-bold text-primary hover:underline"
+                  className="label-mono font-semibold text-signal-text hover:underline"
                   disabled={loading}
                 >
                   {isLogin ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}
